@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+    "net/http"
+	"net/url"
 	"strings"
 	"sync"
 
@@ -56,12 +58,7 @@ func handleLookup(stream network.Stream) {
 	fmt.Println("Lookup request:", reqStr)
 	
 	contentHash, ok := nameToHash.Load(reqStr)
-
-	respInfo := common.LookupResponse{contentHash, "", true}
-	if !ok {
-		respInfo.LookupOk = false
-	}
-
+	respInfo := common.LookupResponse{contentHash, "", ok}
 	respBytes, err := json.Marshal(respInfo)
 	if err != nil {
 		fmt.Println(err)
@@ -69,6 +66,7 @@ func handleLookup(stream network.Stream) {
 		return
 	}
 
+	fmt.Println("Lookup response: ", string(respBytes))
 	err = common.WriteSingleMessage(stream, respBytes)
 	if err != nil {
 		fmt.Println(err)
@@ -99,7 +97,40 @@ func handleAdd(stream network.Stream) {
 	respStr := fmt.Sprintf("Added { %s : %s }",
 		reqInfo.ServiceName, reqInfo.ContentHash)
 	
+	fmt.Println("Lookup response: ", respStr)
 	err = common.WriteSingleMessage(stream, []byte(respStr))
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+}
+
+func handleHttpLookup(w http.ResponseWriter, r *http.Request) {
+    path, err := url.PathUnescape(r.URL.Path)
+    if err != nil {
+		fmt.Println(err)
+		return
+    }
+
+	pathSegments := strings.Split(path, "/")
+	if len(pathSegments) < 3 {
+		fmt.Println("No query found in URL")
+		return
+	}
+
+	reqStr := pathSegments[2]
+	fmt.Println("Lookup request:", reqStr)
+	
+	contentHash, ok := nameToHash.Load(reqStr)
+	respInfo := common.LookupResponse{contentHash, "", ok}
+	respBytes, err := json.Marshal(respInfo)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Println("Lookup response: ", string(respBytes))
+	_, err = w.Write(respBytes)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -124,6 +155,12 @@ func main() {
 
 	discovery.Advertise(ctx, routingDiscovery,
 		common.HashLookupRendezvousString)
+	
+	http.HandleFunc(common.HttpLookupRoute, handleHttpLookup)
+	go func() {
+		fmt.Println(http.ListenAndServe(":8080", nil))
+	}()
+	
 	fmt.Println("Waiting to serve connections...")
 
 	select {}

@@ -4,15 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	// "fmt"
-	// "sync"
+    "io/ioutil"
+    "net/http"
+    "net/url"
 
-	// "github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/host"
-	// "github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/libp2p/go-libp2p-discovery"
-	// "github.com/libp2p/go-libp2p-kad-dht"
 
 	"github.com/Multi-Tier-Cloud/hash-lookup/hl-common"
 )
@@ -76,4 +74,27 @@ func GetHash(query string) (contentHash, dockerHash string, err error) {
 	contentHash, dockerHash, err = GetHashExistingRouting(ctx, host,
 		routingDiscovery, query)
 	return contentHash, dockerHash, err
+}
+
+func GetHashHttp(query string) (contentHash, dockerHash string, err error) {
+	urlStr := "http://127.0.0.1:8080" + common.HttpLookupRoute + url.PathEscape(query)
+	resp, err := http.Get(urlStr)
+	if err != nil {
+		return "", "", err
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	
+	var respInfo common.LookupResponse
+	err = json.Unmarshal(body, &respInfo)
+	if err != nil {
+		return "", "", errors.New(err.Error() + ": " + string(body))
+	}
+
+	err = nil
+	if !respInfo.LookupOk {
+		err = errors.New("hashlookup: Error finding hash for " + query)
+	}
+	return respInfo.ContentHash, respInfo.DockerHash, err
 }

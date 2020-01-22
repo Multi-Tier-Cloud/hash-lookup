@@ -1,19 +1,13 @@
 package main
 
 import (
-	// "context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
-	// "sync"
 
-	// "github.com/libp2p/go-libp2p"
-	// "github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
-	// "github.com/libp2p/go-libp2p-discovery"
-	// "github.com/libp2p/go-libp2p-kad-dht"
 
 	"github.com/Multi-Tier-Cloud/hash-lookup/hl-common"
 )

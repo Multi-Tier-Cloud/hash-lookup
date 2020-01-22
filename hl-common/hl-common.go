@@ -33,6 +33,8 @@ var LookupProtocolID string = "/lookup/1.0";
 
 var AddProtocolID string = "/add/1.0";
 
+var HttpLookupRoute string = "/lookup/"
+
 var BootstrapPeers []multiaddr.Multiaddr
 
 func init() {

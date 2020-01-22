@@ -11,7 +11,7 @@ func main() {
 	
 	fmt.Println("Looking up:", testString)
 
-	contentHash, _, err := hashlookup.GetHash(testString)
+	contentHash, _, err := hashlookup.GetHashHttp(testString)
 	if err != nil {
 		panic(err)
 	}
