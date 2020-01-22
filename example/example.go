@@ -3,14 +3,18 @@ package main
 import (
 	"fmt"
 
-	"github.com/Multi-Tier-Cloud/hash-lookup/lookup-client"
+	"github.com/Multi-Tier-Cloud/hash-lookup/hashlookup"
 )
 
 func main() {
-	result, ok := client.GetHash("hello-there")
-	if !ok {
-		fmt.Println("Error")
-	} else {
-		fmt.Println("Received:", result)
+	testString := "hello-there"
+	
+	fmt.Println("Looking up:", testString)
+
+	contentHash, _, err := hashlookup.GetHash(testString)
+	if err != nil {
+		panic(err)
 	}
+
+	fmt.Println("Got hash:", contentHash)
 }
