@@ -77,7 +77,8 @@ func GetHash(query string) (contentHash, dockerHash string, err error) {
 }
 
 func GetHashHttp(query string) (contentHash, dockerHash string, err error) {
-	urlStr := "http://127.0.0.1:8080" + common.HttpLookupRoute + url.PathEscape(query)
+	hardcodedHttpAddr := "http://10.11.17.13:8080"
+	urlStr := hardcodedHttpAddr + common.HttpLookupRoute + url.PathEscape(query)
 	resp, err := http.Get(urlStr)
 	if err != nil {
 		return "", "", err

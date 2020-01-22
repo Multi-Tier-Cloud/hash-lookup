@@ -158,6 +158,7 @@ func main() {
 	
 	http.HandleFunc(common.HttpLookupRoute, handleHttpLookup)
 	go func() {
+		fmt.Println("Listening for HTTP requests on port 8080")
 		fmt.Println(http.ListenAndServe(":8080", nil))
 	}()
 	
