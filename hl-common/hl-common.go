@@ -10,6 +10,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/libp2p/go-libp2p-discovery"
 	"github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/multiformats/go-multiaddr"
@@ -29,9 +30,9 @@ type AddRequest struct {
 
 var HashLookupRendezvousString string = "hash-lookup";
 
-var LookupProtocolID string = "/lookup/1.0";
+var LookupProtocolID protocol.ID = "/lookup/1.0";
 
-var AddProtocolID string = "/add/1.0";
+var AddProtocolID protocol.ID = "/add/1.0";
 
 var HttpLookupRoute string = "/lookup/"
 
