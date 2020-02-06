@@ -12,13 +12,14 @@ import (
 	// "github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/protocol"
 
+	"github.com/Multi-Tier-Cloud/hash-lookup/hashlookup"
 	"github.com/Multi-Tier-Cloud/hash-lookup/hl-common"
 )
 
 var commands = map[string]func(){
-	"add":addCmd,
-	"get":getCmd,
-	"list":listCmd,
+	"add": addCmd,
+	"get": getCmd,
+	"list": listCmd,
 }
 
 func main() {
@@ -37,17 +38,17 @@ func main() {
 }
 
 func addCmd() {
-	if len(os.Args) < 3 {
-		exePath, err := os.Executable()
+	if len(os.Args) < 4 {
+		exeName, err := getExeName()
 		if err != nil {
 			panic(err)
 		}
-		exeName := filepath.Base(exePath)
-
-		fmt.Println("Usage:", exeName, "<service name> <hash>")
+		
+		fmt.Println("Usage:", exeName, "add <service name> <hash>")
 		return
 	}
-	reqInfo := common.AddRequest{os.Args[1], os.Args[2], ""}
+
+	reqInfo := common.AddRequest{os.Args[2], os.Args[3], ""}
 	reqBytes, err := json.Marshal(reqInfo)
 	if err != nil {
 		panic(err)
@@ -62,9 +63,34 @@ func addCmd() {
 	fmt.Println("Response:", respStr)
 }
 
-func getCmd() {}
+func getCmd() {
+	if len(os.Args) < 3 {
+		exeName, err := getExeName()
+		if err != nil {
+			panic(err)
+		}
+
+		fmt.Println("Usage:", exeName, "get <service name>")
+		return
+	}
+
+	contentHash, _, err := hashlookup.GetHash(os.Args[2])
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("Response:", contentHash)
+}
 
 func listCmd() {}
+
+func getExeName() (exeName string, err error) {
+	exePath, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	exeName = filepath.Base(exePath)
+	return exeName, nil
+}
 
 func sendRequest(protocolID protocol.ID, request []byte) (
 	response []byte, err error) {
