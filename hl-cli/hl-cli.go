@@ -4,13 +4,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/ipfs/go-cid"
+
 	// "github.com/libp2p/go-libp2p-core/host"
 	// "github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/protocol"
+
+	"github.com/multiformats/go-multihash"
 
 	"github.com/Multi-Tier-Cloud/hash-lookup/hashlookup"
 	"github.com/Multi-Tier-Cloud/hash-lookup/hl-common"
@@ -44,11 +49,17 @@ func addCmd() {
 			panic(err)
 		}
 		
-		fmt.Println("Usage:", exeName, "add <service name> <hash>")
+		fmt.Println("Usage:", exeName, "add <service name> <file>")
 		return
 	}
 
-	reqInfo := common.AddRequest{os.Args[2], os.Args[3], ""}
+	hash, err := getFileHash(os.Args[3])
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("Hashed file:", hash)
+
+	reqInfo := common.AddRequest{os.Args[2], hash, ""}
 	reqBytes, err := json.Marshal(reqInfo)
 	if err != nil {
 		panic(err)
@@ -90,6 +101,33 @@ func getExeName() (exeName string, err error) {
 	}
 	exeName = filepath.Base(exePath)
 	return exeName, nil
+}
+
+func getFileHash(fileName string) (hashB58Str string, err error) {
+	fileData, err := ioutil.ReadFile(fileName)
+	if err != nil {
+		return "", err
+	}
+
+	return getHash(fileData)
+}
+
+func getHash(data []byte) (hashB58Str string, err error) {
+	// Create a cid manually by specifying the 'prefix' parameters
+	pref := cid.Prefix{
+		Version: 1,
+		Codec: cid.Raw,
+		MhType: multihash.SHA2_256,
+		MhLength: -1, // default length
+	}
+
+	cid, err := pref.Sum(data)
+	if err != nil {
+		return "", err
+	}
+
+	hashB58Str = cid.Hash().B58String()
+	return hashB58Str, nil
 }
 
 func sendRequest(protocolID protocol.ID, request []byte) (
