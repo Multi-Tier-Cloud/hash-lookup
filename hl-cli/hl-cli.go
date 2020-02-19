@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -10,13 +11,21 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ipfs/go-cid"
+	"github.com/ipfs/go-ipfs/core"
+    "github.com/ipfs/go-ipfs/core/coreunix"
+
+    "github.com/ipfs/go-blockservice"
+    "github.com/ipfs/go-ipfs-files"
+    dag "github.com/ipfs/go-merkledag"
+    dagtest "github.com/ipfs/go-merkledag/test"
+    "github.com/ipfs/go-mfs"
+    "github.com/ipfs/go-unixfs"
 
 	// "github.com/libp2p/go-libp2p-core/host"
 	// "github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/protocol"
 
-	"github.com/multiformats/go-multihash"
+	// "github.com/multiformats/go-multihash"
 
 	"github.com/Multi-Tier-Cloud/hash-lookup/hashlookup"
 	"github.com/Multi-Tier-Cloud/hash-lookup/hl-common"
@@ -56,18 +65,17 @@ func usage() {
 }
 
 func getExeName() (exeName string, err error) {
-	exePath, err := os.Executable()
-	if err != nil {
-		return "", err
-	}
-	exeName = filepath.Base(exePath)
+	// exePath, err := os.Executable()
+	// if err != nil {
+	// 	return "", err
+	// }
+	exeName = filepath.Base(os.Args[0])
 	return exeName, nil
 }
 
 func addCmd() {
     addFlags := flag.NewFlagSet("add", flag.ExitOnError)
-    fileFlag := addFlags.String("file", "", "hash file")
-	dirFlag := addFlags.String("dir", "", "hash directory")
+    fileFlag := addFlags.String("file", "", "hash file or directory")
 	stdinFlag := addFlags.Bool("stdin", false, "hash from stdin")
 	
 	addUsage := func() {
@@ -99,12 +107,6 @@ func addCmd() {
 		    panic(err)
 	    }
 	    fmt.Println("Hashed file:", hash)
-	} else if *dirFlag != "" {
-	    hash, err = directoryHash(*dirFlag)
-	    if err != nil {
-		    panic(err)
-	    }
-	    fmt.Println("Hashed directory:", hash)
 	} else if *stdinFlag {
 	    hash, err = stdinHash()
 	    if err != nil {
@@ -113,7 +115,7 @@ func addCmd() {
 	    fmt.Println("Hashed stdin:", hash)
 	}
 
-    fmt.Println("Adding", addFlags.Arg(0), ":", hash)
+    fmt.Println("Adding {", addFlags.Arg(0), ":", hash, "}")
 	reqInfo := common.AddRequest{addFlags.Arg(0), hash, ""}
 	reqBytes, err := json.Marshal(reqInfo)
 	if err != nil {
@@ -129,70 +131,68 @@ func addCmd() {
 	fmt.Println("Response:", respStr)
 }
 
-func fileHash(fileName string) (hashB58Str string, err error) {
-	fileData, err := ioutil.ReadFile(fileName)
-	if err != nil {
-		return "", err
-	}
+func fileHash(path string) (hash string, err error) {
+	stat, err := os.Lstat(path)
+    if err != nil {
+        return "", err
+    }
 
-	return getHash(fileData)
+    fileNode, err := files.NewSerialFile(path, false, stat)
+    if err != nil {
+        return "", err
+    }
+    defer fileNode.Close()
+
+    return getHash(fileNode)
 }
 
-func directoryHash(dirPathName string) (hashB58Str string, err error) {
-	allData := []byte{}
 
-	err = filepath.Walk(dirPathName,
-		func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			
-			if info.IsDir() {
-			    return nil
-			}
-			
-			fmt.Println(path)
-
-			fileData, err := ioutil.ReadFile(path)
-			if err != nil {
-				return err
-			}
-
-			allData = append(allData, fileData...)
-			return nil
-	})
-	if err != nil {
-		return "", err
-	}
-
-	return getHash(allData)
-}
-
-func stdinHash() (hashB58Str string, err error) {
+func stdinHash() (hash string, err error) {
 	stdinData, err := ioutil.ReadAll(os.Stdin)
 	if err != nil {
 		return "", err
 	}
 
-	return getHash(stdinData)
+	stdinFile := files.NewBytesFile(stdinData)
+
+	return getHash(stdinFile)
 }
 
-func getHash(data []byte) (hashB58Str string, err error) {
-	// Create a cid manually by specifying the 'prefix' parameters
-	pref := cid.Prefix{
-		Version: 1,
-		Codec: cid.Raw,
-		MhType: multihash.SHA2_256,
-		MhLength: -1, // default length
-	}
+func getHash(fileNode files.Node) (hash string, err error) {
+    ctx := context.Background()
+    nilIpfsNode, err := core.NewNode(ctx, &core.BuildCfg{NilRepo: true})
+    if err != nil {
+        return "", err
+    }
 
-	cid, err := pref.Sum(data)
-	if err != nil {
-		return "", err
-	}
+    bserv := blockservice.New(nilIpfsNode.Blockstore, nilIpfsNode.Exchange)
+    dserv := dag.NewDAGService(bserv)
 
-	hashB58Str = cid.Hash().B58String()
-	return hashB58Str, nil
+    fileAdder, err := coreunix.NewAdder(
+		ctx, nilIpfsNode.Pinning, nilIpfsNode.Blockstore, dserv)
+    if err != nil {
+        return "", err
+    }
+
+    fileAdder.Pin = false
+    fileAdder.CidBuilder = dag.V0CidPrefix()
+
+    mockDserv := dagtest.Mock()
+    emptyDirNode := unixfs.EmptyDirNode()
+    emptyDirNode.SetCidBuilder(fileAdder.CidBuilder)
+    mfsRoot, err := mfs.NewRoot(ctx, mockDserv, emptyDirNode, nil)
+    if err != nil {
+        return "", err
+    }
+    fileAdder.SetMfsRoot(mfsRoot)
+
+    dagIpldNode, err := fileAdder.AddAllAndPin(fileNode)
+    if err != nil {
+        return "", err
+    }
+
+	hash = dagIpldNode.String()
+	return hash, nil
 }
 
 func getCmd() {
