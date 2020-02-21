@@ -9,11 +9,9 @@ import (
     "net/url"
 
     "github.com/libp2p/go-libp2p-core/host"
-    "github.com/libp2p/go-libp2p-core/protocol"
     "github.com/libp2p/go-libp2p-discovery"
 
     "github.com/Multi-Tier-Cloud/common/p2pnode"
-    "github.com/Multi-Tier-Cloud/common/p2putil"
     "github.com/Multi-Tier-Cloud/hash-lookup/hl-common"
 )
 
@@ -27,57 +25,33 @@ func GetHash(query string) (contentHash, dockerHash string, err error) {
     defer node.Host.Close()
     defer node.DHT.Close()
 
-    contentHash, dockerHash, err = GetHashExistingRouting(ctx, node.Host,
+    contentHash, dockerHash, err = GetHashWithHostRouting(ctx, node.Host,
         node.RoutingDiscovery, query)
     return contentHash, dockerHash, err
 }
 
-func GetHashExistingRouting(
+func GetHashWithHostRouting(
     ctx context.Context, host host.Host,
     routingDiscovery *discovery.RoutingDiscovery, query string) (
     contentHash, dockerHash string, err error) {
-
-    peerChan, err := routingDiscovery.FindPeers(ctx,
-        common.HashLookupRendezvousString)
+    
+    response, err := common.SendRequestWithHostRouting(
+        ctx, host, routingDiscovery, common.LookupProtocolID, []byte(query))
     if err != nil {
         return "", "", err
     }
 
-    for peer := range peerChan {
-        if peer.ID == host.ID() {
-            continue
-        }
-
-        stream, err := host.NewStream(ctx, peer.ID,
-            protocol.ID(common.LookupProtocolID))
-        if err != nil {
-            continue
-        }
-
-        err = p2putil.WriteMsg(stream, []byte(query))
-        if err != nil {
-            panic(err)
-        }
-
-        data, err := p2putil.ReadMsg(stream)
-        if err != nil {
-            panic(err)
-        }
-
-        var respInfo common.LookupResponse
-        err = json.Unmarshal(data, &respInfo)
-        if err != nil {
-            return "", "", err
-        }
-
-        err = nil
-        if !respInfo.LookupOk {
-            err = errors.New("hashlookup: Error finding hash for " + query)
-        }
-        return respInfo.ContentHash, respInfo.DockerHash, err
+    var respInfo common.LookupResponse
+    err = json.Unmarshal(response, &respInfo)
+    if err != nil {
+        return "", "", err
     }
 
-    return "", "", errors.New("hashlookup: No hash-lookup service found")
+    err = nil
+    if !respInfo.LookupOk {
+        err = errors.New("hashlookup: Error finding hash for " + query)
+    }
+    return respInfo.ContentHash, respInfo.DockerHash, err
 }
 
 func GetHashHttp(query string) (contentHash, dockerHash string, err error) {

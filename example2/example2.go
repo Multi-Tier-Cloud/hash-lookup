@@ -53,7 +53,7 @@ func main() {
 
 	routingDiscovery := discovery.NewRoutingDiscovery(kademliaDHT)
 
-	contentHash, _, err := hashlookup.GetHashExistingRouting(ctx, host,
+	contentHash, _, err := hashlookup.GetHashWithHostRouting(ctx, host,
 		routingDiscovery, serviceName)
 	if err != nil {
 		panic(err)

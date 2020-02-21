@@ -3,7 +3,6 @@ package main
 import (
     "context"
     "encoding/json"
-    "errors"
     "flag"
     "fmt"
     "io/ioutil"
@@ -23,7 +22,6 @@ import (
     "github.com/libp2p/go-libp2p-core/protocol"
 
     "github.com/Multi-Tier-Cloud/common/p2pnode"
-    "github.com/Multi-Tier-Cloud/common/p2putil"
     "github.com/Multi-Tier-Cloud/hash-lookup/hashlookup"
     "github.com/Multi-Tier-Cloud/hash-lookup/hl-common"
 )
@@ -271,37 +269,6 @@ func sendRequest(protocolID protocol.ID, request []byte, bootstrap string) (
     defer node.Host.Close()
     defer node.DHT.Close()
 
-    peerChan, err := node.RoutingDiscovery.FindPeers(ctx,
-        common.HashLookupRendezvousString)
-    if err != nil {
-        return nil, err
-    }
-
-    for peer := range peerChan {
-        if peer.ID == node.Host.ID() {
-            continue
-        }
-
-        fmt.Println("Connecting to:", peer)
-        stream, err := node.Host.NewStream(ctx, peer.ID, protocolID)
-        if err != nil {
-            fmt.Println("Connection failed:", err)
-            continue
-        }
-
-        err = p2putil.WriteMsg(stream, request)
-        if err != nil {
-            return nil, err
-        }
-
-        response, err := p2putil.ReadMsg(stream)
-        if err != nil {
-            return nil, err
-        }
-
-        return response, nil
-    }
-
-    return nil, errors.New(
-        "hl-cli: Failed to connect to any hash-lookup peers")
+    return common.SendRequestWithHostRouting(
+        ctx, node.Host, node.RoutingDiscovery, protocolID, request)
 }
