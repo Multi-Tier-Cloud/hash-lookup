@@ -22,6 +22,8 @@ import (
 
     "github.com/libp2p/go-libp2p-core/protocol"
 
+    "github.com/Multi-Tier-Cloud/common/p2pnode"
+    "github.com/Multi-Tier-Cloud/common/p2putil"
     "github.com/Multi-Tier-Cloud/hash-lookup/hashlookup"
     "github.com/Multi-Tier-Cloud/hash-lookup/hl-common"
 )
@@ -99,6 +101,8 @@ func addCmd() {
         "Hash microservice content from stdin")
     noAddFlag := addFlags.Bool("no-add", false,
         "Only hash the given content, do not add it to hash-lookup service")
+    bootstrapFlag := addFlags.String("bootstrap", "",
+        "For debugging: Connect to specified bootstrap node multiaddress")
 
     addUsage := func() {
         exeName := getExeName()
@@ -161,7 +165,7 @@ func addCmd() {
         panic(err)
     }
 
-    data, err := sendRequest(common.AddProtocolID, reqBytes)
+    data, err := sendRequest(common.AddProtocolID, reqBytes, *bootstrapFlag)
     if err != nil {
         panic(err)
     }
@@ -252,40 +256,45 @@ func getCmd() {
 
 func listCmd() {}
 
-func sendRequest(protocolID protocol.ID, request []byte) (
+func sendRequest(protocolID protocol.ID, request []byte, bootstrap string) (
     response []byte, err error) {
 
-    ctx, host, kademliaDHT, routingDiscovery, err := common.Libp2pSetup(true)
+    ctx := context.Background()
+    nodeConfig := p2pnode.NewConfig()
+    if bootstrap != "" {
+        nodeConfig.BootstrapPeers = []string{bootstrap}
+    }
+    node, err := p2pnode.NewNode(ctx, nodeConfig)
     if err != nil {
         return nil, err
     }
-    defer host.Close()
-    defer kademliaDHT.Close()
+    defer node.Host.Close()
+    defer node.DHT.Close()
 
-    peerChan, err := routingDiscovery.FindPeers(ctx,
+    peerChan, err := node.RoutingDiscovery.FindPeers(ctx,
         common.HashLookupRendezvousString)
     if err != nil {
         return nil, err
     }
 
     for peer := range peerChan {
-        if peer.ID == host.ID() {
+        if peer.ID == node.Host.ID() {
             continue
         }
 
         fmt.Println("Connecting to:", peer)
-        stream, err := host.NewStream(ctx, peer.ID, protocolID)
+        stream, err := node.Host.NewStream(ctx, peer.ID, protocolID)
         if err != nil {
             fmt.Println("Connection failed:", err)
             continue
         }
 
-        err = common.WriteSingleMessage(stream, request)
+        err = p2putil.WriteMsg(stream, request)
         if err != nil {
             return nil, err
         }
 
-        response, err := common.ReadSingleMessage(stream)
+        response, err := p2putil.ReadMsg(stream)
         if err != nil {
             return nil, err
         }
