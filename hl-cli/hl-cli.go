@@ -117,8 +117,14 @@ func addCmd() {
     addFlags.Usage = addUsage
     addFlags.Parse(os.Args[2:])
     
-    if len(addFlags.Args()) != 1 {
-        fmt.Fprintln(os.Stderr, "Error: wrong number of required arguments")
+    if len(addFlags.Args()) < 1 {
+        fmt.Fprintln(os.Stderr, "Error: missing required argument <name>")
+        addUsage()
+        return
+    }
+
+    if len(addFlags.Args()) > 1 {
+        fmt.Fprintln(os.Stderr, "Error: too many arguments")
         addUsage()
         return
     }
@@ -237,15 +243,55 @@ func getHash(fileNode files.Node) (hash string, err error) {
 }
 
 func getCmd() {
-    if len(os.Args) < 3 {
-        fmt.Fprintln(os.Stderr, "Error: missing required arguments")
+    getFlags := flag.NewFlagSet("get", flag.ExitOnError)
+    bootstrapFlag := getFlags.String("bootstrap", "",
+        "For debugging: Connect to specified bootstrap node multiaddress")
 
+    getUsage := func() {
         exeName := getExeName()
-        fmt.Fprintln(os.Stderr, "Usage:", exeName, "get <name>")
+        fmt.Fprintln(os.Stderr, "Usage:", exeName, "get [<options>] <name>")
+        fmt.Fprintln(os.Stderr,
+`
+<name>
+        Name of microservice to get hash of
+
+<options>`)
+        getFlags.PrintDefaults()
+    }
+    
+    getFlags.Usage = getUsage
+    getFlags.Parse(os.Args[2:])
+
+    if len(getFlags.Args()) < 1 {
+        fmt.Fprintln(os.Stderr, "Error: missing required argument <name>")
+        getUsage()
         return
     }
 
-    contentHash, _, err := hashlookup.GetHash(os.Args[2])
+    if len(getFlags.Args()) > 1 {
+        fmt.Fprintln(os.Stderr, "Error: too many arguments")
+        getUsage()
+        return
+    }
+
+
+    ctx := context.Background()
+    nodeConfig := p2pnode.NewConfig()
+    if *bootstrapFlag != "" {
+        nodeConfig.BootstrapPeers = []string{*bootstrapFlag}
+    }
+    node, err := p2pnode.NewNode(ctx, nodeConfig)
+    if err != nil {
+        panic(err)
+    }
+    defer node.Host.Close()
+    defer node.DHT.Close()
+
+    contentHash, _, err := hashlookup.GetHashWithHostRouting(ctx, node.Host,
+        node.RoutingDiscovery, getFlags.Arg(0))
+
+
+    // contentHash, _, err := hashlookup.GetHash(os.Args[2])
     if err != nil {
         panic(err)
     }
