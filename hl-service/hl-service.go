@@ -7,9 +7,11 @@ import (
     "fmt"
     "net/http"
     "net/url"
+    "os"
+    "os/exec"
     "strconv"
     "strings"
-    "sync"
+    // "sync"
     "time"
 
     "github.com/libp2p/go-libp2p-core/network"
@@ -20,7 +22,7 @@ import (
     "github.com/Multi-Tier-Cloud/common/p2putil"
     "github.com/Multi-Tier-Cloud/hash-lookup/hl-common"
 )
-
+/*
 type StringMap struct {
     sync.RWMutex
     data map[string]string
@@ -51,12 +53,16 @@ func (sm *StringMap) Store(key, value string) {
     sm.Unlock()
 }
 
-// var nameToHash = NewStringMap()
-
-var cli *clientv3.Client
+var nameToHash = NewStringMap()
+*/
+var etcdCli *clientv3.Client
 
 func main() {
-    etcdPortFlag := flag.Int("etcdPort", 2379,
+    etcdIpFlag := flag.String("etcd-ip", "127.0.0.1",
+        "Port to connect to etcd instance")
+    etcdClientPortFlag := flag.Int("etcd-client-port", 2379,
+        "Port to connect to etcd instance")
+    etcdPeerPortFlag := flag.Int("etcd-peer-port", 2380,
         "Port to connect to etcd instance")
     localFlag := flag.Bool("local", false,
         "For debugging: Run locally and do not connect to bootstrap peers")
@@ -66,21 +72,57 @@ func main() {
 
     ctx := context.Background()
 
+    etcdClientEndpoint := *etcdIpFlag + ":" + strconv.Itoa(*etcdClientPortFlag)
+    etcdPeerEndpoint := *etcdIpFlag + ":" + strconv.Itoa(*etcdPeerPortFlag)
+
+    etcdClientUrl := "http://" + etcdClientEndpoint
+    etcdPeerUrl := "http://" + etcdPeerEndpoint
+
     var err error
-    cli, err = clientv3.New(clientv3.Config{
-        Endpoints: []string{"localhost:" + strconv.Itoa(*etcdPort)},
+
+    etcdArgs := []string{
+        "--name", "default",
+        "--listen-client-urls", etcdClientUrl,
+        "--advertise-client-urls", etcdClientUrl,
+        "--listen-peer-urls", etcdPeerUrl,
+        "--initial-advertise-peer-urls", etcdPeerUrl,
+        "--initial-cluster", "default=" + etcdPeerUrl,
+        "--initial-cluster-state", "new",
+    }
+    cmd := exec.Command("etcd", etcdArgs...)
+    cmd.Stdout = os.Stdout
+    cmd.Stderr = os.Stderr
+    go func() {
+        err := cmd.Run()
+        if err != nil {
+            panic(err)
+        }
+    }()
+
+    etcdCli, err = clientv3.New(clientv3.Config{
+        Endpoints: []string{etcdClientEndpoint},
         DialTimeout: 5 * time.Second,
     })
     if err != nil {
         panic(err)
     }
-    defer cli.Close()
+    defer etcdCli.Close()
 
-    resp, err := cli.Put(ctx, "hello-there", "test-test-test")
+    putResp, err := etcdCli.Put(ctx, "hello-there", "test-test-test")
     if err != nil {
         panic(err)
     }
-    fmt.Println("ETCD Response:", resp)
+    fmt.Println("etcd Response:", putResp)
+
+    // mresp, err := etcdCli.MemberAdd(context.Background(), []string{"http://localhost:3333"})
+    // if err != nil {
+    //     panic(err)
+    // }
+    // fmt.Println("added member.Name:", mresp.Member.Name)
+    // fmt.Println("added member.PeerURLs:", mresp.Member.PeerURLs)
+    // for _, mem := range(mresp.Members) {
+    //     fmt.Println("name:", mem.Name, "peer:", mem.PeerURLs)
+    // }
 
     nodeConfig := p2pnode.NewConfig()
     if *localFlag {
@@ -179,11 +221,13 @@ func handleAdd(stream network.Stream) {
 
     // nameToHash.Store(reqInfo.ServiceName, reqInfo.ContentHash)
     ctx := context.Background()
-    resp, err := cli.Put(ctx, reqInfo.ServiceName, reqInfo.ContentHash)
+    putResp, err := etcdCli.Put(ctx, reqInfo.ServiceName, reqInfo.ContentHash)
     if err != nil {
-        panic(err)
+        fmt.Println(err)
+        stream.Reset()
+        return
     }
-    fmt.Println(resp)
+    fmt.Println(putResp)
     
     respStr := fmt.Sprintf("Added { %s : %s }",
         reqInfo.ServiceName, reqInfo.ContentHash)
@@ -254,18 +298,18 @@ func doLookup(reqStr string) (respBytes []byte, err error) {
     ok := false
 
     ctx := context.Background()
-    etcdResp, err := cli.Get(ctx, reqStr)
+    getResp, err := etcdCli.Get(ctx, reqStr)
     if err != nil {
         return respBytes, err
     }
-    for _, ev := range etcdResp.Kvs {
-        contentHash = string(ev.Value)
+    for _, kv := range getResp.Kvs {
+        contentHash = string(kv.Value)
         ok = true
         break
     }
 
     respInfo := common.LookupResponse{contentHash, "", ok}
-    respBytes, err := json.Marshal(respInfo)
+    respBytes, err = json.Marshal(respInfo)
     if err != nil {
         return respBytes, err
     }
