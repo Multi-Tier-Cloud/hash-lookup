@@ -15,6 +15,7 @@ import (
     "time"
 
     "github.com/libp2p/go-libp2p-core/network"
+    "github.com/libp2p/go-libp2p-core/protocol"
     
     "go.etcd.io/etcd/clientv3"
 
@@ -58,14 +59,18 @@ var nameToHash = NewStringMap()
 var etcdCli *clientv3.Client
 
 func main() {
+    newEtcdClusterFlag := flag.Bool("new-etcd-cluster", false,
+        "Start running new etcd cluster")
     etcdIpFlag := flag.String("etcd-ip", "127.0.0.1",
-        "Port to connect to etcd instance")
+        "Local etcd instance IP address")
     etcdClientPortFlag := flag.Int("etcd-client-port", 2379,
-        "Port to connect to etcd instance")
+        "Local etcd instance client port")
     etcdPeerPortFlag := flag.Int("etcd-peer-port", 2380,
-        "Port to connect to etcd instance")
+        "Local etcd instance peer port")
     localFlag := flag.Bool("local", false,
         "For debugging: Run locally and do not connect to bootstrap peers")
+    bootstrapFlag := flag.String("bootstrap", "",
+        "For debugging: Connect to specified bootstrap node multiaddress")
     flag.Parse()
 
     // nameToHash.Store("hello-there", "test-test-test")
@@ -78,17 +83,34 @@ func main() {
     etcdClientUrl := "http://" + etcdClientEndpoint
     etcdPeerUrl := "http://" + etcdPeerEndpoint
 
+    etcdName := fmt.Sprintf(
+        "%s-%d-%d", *etcdIpFlag, *etcdClientPortFlag, *etcdPeerPortFlag)
+
+    initialCluster := etcdName + "=" + etcdPeerUrl
+    clusterState := "new"
+
     var err error
 
+    if !(*newEtcdClusterFlag) {
+        initialCluster, err = sendMemberAddRequest(
+            etcdName, etcdPeerUrl, *localFlag, *bootstrapFlag)
+        if err != nil {
+            panic(err)
+        }
+        clusterState = "existing"
+    }
+
     etcdArgs := []string{
-        "--name", "default",
+        "--name", etcdName,
         "--listen-client-urls", etcdClientUrl,
         "--advertise-client-urls", etcdClientUrl,
         "--listen-peer-urls", etcdPeerUrl,
         "--initial-advertise-peer-urls", etcdPeerUrl,
-        "--initial-cluster", "default=" + etcdPeerUrl,
-        "--initial-cluster-state", "new",
+        "--initial-cluster", initialCluster,
+        "--initial-cluster-state", clusterState,
     }
+    fmt.Println(etcdArgs)
+    
     cmd := exec.Command("etcd", etcdArgs...)
     cmd.Stdout = os.Stdout
     cmd.Stderr = os.Stderr
@@ -108,30 +130,22 @@ func main() {
     }
     defer etcdCli.Close()
 
-    putResp, err := etcdCli.Put(ctx, "hello-there", "test-test-test")
+    putResp, err := etcdCli.Put(ctx, "hello-there", "general-kenobi")
     if err != nil {
         panic(err)
     }
     fmt.Println("etcd Response:", putResp)
 
-    // mresp, err := etcdCli.MemberAdd(context.Background(), []string{"http://localhost:3333"})
-    // if err != nil {
-    //     panic(err)
-    // }
-    // fmt.Println("added member.Name:", mresp.Member.Name)
-    // fmt.Println("added member.PeerURLs:", mresp.Member.PeerURLs)
-    // for _, mem := range(mresp.Members) {
-    //     fmt.Println("name:", mem.Name, "peer:", mem.PeerURLs)
-    // }
-
     nodeConfig := p2pnode.NewConfig()
     if *localFlag {
         nodeConfig.BootstrapPeers = []string{}
+    } else if *bootstrapFlag != "" {
+        nodeConfig.BootstrapPeers = []string{*bootstrapFlag}
     }
     nodeConfig.StreamHandlers = append(nodeConfig.StreamHandlers,
-        handleLookup, handleAdd)
+        handleLookup, handleAdd, handleMemberAdd)
     nodeConfig.HandlerProtocolIDs = append(nodeConfig.HandlerProtocolIDs,
-        common.LookupProtocolID, common.AddProtocolID)
+        common.LookupProtocolID, common.AddProtocolID, memberAddProtocolID)
     nodeConfig.Rendezvous = append(nodeConfig.Rendezvous,
         common.HashLookupRendezvousString)
     node, err := p2pnode.NewNode(ctx, nodeConfig)
@@ -316,4 +330,131 @@ func doLookup(reqStr string) (respBytes []byte, err error) {
 
     fmt.Println("Lookup response: ", string(respBytes))
     return respBytes, nil
+}
+
+type memberAddRequest struct {
+    MemberName string
+    MemberPeerUrl string
+}
+
+var memberAddProtocolID protocol.ID = "/memberadd/1.0"
+
+func sendMemberAddRequest(
+    newMemName, newMemPeerUrl string, local bool, bootstrap string) (
+    initialCluster string, err error) {
+
+    ctx := context.Background()
+    nodeConfig := p2pnode.NewConfig()
+    if local {
+        nodeConfig.BootstrapPeers = []string{}
+    } else if bootstrap != "" {
+        nodeConfig.BootstrapPeers = []string{bootstrap}
+    }
+    node, err := p2pnode.NewNode(ctx, nodeConfig)
+    if err != nil {
+        return "", err
+    }
+    defer node.Host.Close()
+    defer node.DHT.Close()
+
+    reqInfo := memberAddRequest{newMemName, newMemPeerUrl}
+    reqBytes, err := json.Marshal(reqInfo)
+    if err != nil {
+        return "", err
+    }
+
+    response, err := common.SendRequestWithHostRouting(
+        ctx, node.Host, node.RoutingDiscovery, memberAddProtocolID, reqBytes)
+    if err != nil {
+        return "", err
+    }
+
+    initialCluster = strings.TrimSpace(string(response))
+    
+    return initialCluster, nil
+}
+
+func handleMemberAdd(stream network.Stream) {
+    data, err := p2putil.ReadMsg(stream)
+    if err != nil {
+        fmt.Println(err)
+        return
+    }
+    
+    reqStr := strings.TrimSpace(string(data))
+    fmt.Println("Member add request:", reqStr)
+
+    var reqInfo memberAddRequest
+    err = json.Unmarshal([]byte(reqStr), &reqInfo)
+    if err != nil {
+        fmt.Println(err)
+        stream.Reset()
+        return
+    }
+
+    initialCluster, err := addEtcdMember(
+        reqInfo.MemberName, reqInfo.MemberPeerUrl)
+    if err != nil {
+        fmt.Println(err)
+        stream.Reset()
+        return
+    }
+    
+    fmt.Println("Member add response: ", initialCluster)
+    err = p2putil.WriteMsg(stream, []byte(initialCluster))
+    if err != nil {
+        fmt.Println(err)
+        return
+    }
+}
+
+func addEtcdMember(newMemName, newMemPeerUrl string) (
+    initialCluster string, err error) {
+
+    ctx := context.Background()
+    memAddResp, err := etcdCli.MemberAdd(ctx, []string{newMemPeerUrl/*"http://localhost:3333"*/})
+    if err != nil {
+        return "", nil
+    }
+
+    newMemId := memAddResp.Member.ID
+
+    clusterPeerUrls := []string{}
+    for _, mem := range memAddResp.Members {
+        name := mem.Name
+        if mem.ID == newMemId {
+            name = newMemName
+        }
+        for _, peerUrl := range mem.PeerURLs {
+            clusterPeerUrls = append(
+                clusterPeerUrls, fmt.Sprintf("%s=%s", name, peerUrl))
+        }
+    }
+
+    initialCluster = strings.Join(clusterPeerUrls, ",")
+
+    return initialCluster, nil
+    // fmt.Println("added member.Name:", mresp.Member.Name)
+    // fmt.Println("added member.PeerURLs:", mresp.Member.PeerURLs)
+    // for _, mem := range(mresp.Members) {
+    //     fmt.Println("name:", mem.Name, "peer:", mem.PeerURLs)
+    // }
+
+    /*
+        conf := []string{}
+		for _, memb := range resp.Members {
+			for _, u := range memb.PeerURLs {
+				n := memb.Name
+				if memb.ID == newID {
+					n = newMemberName
+				}
+				conf = append(conf, fmt.Sprintf("%s=%s", n, u))
+			}
+		}
+
+		fmt.Print("\n")
+		fmt.Printf("ETCD_NAME=%q\n", newMemberName)
+		fmt.Printf("ETCD_INITIAL_CLUSTER=%q\n", strings.Join(conf, ","))
+		fmt.Printf("ETCD_INITIAL_ADVERTISE_PEER_URLS=%q\n", memberPeerURLs)
+    */
 }
