@@ -11,7 +11,6 @@ import (
     "os/exec"
     "strconv"
     "strings"
-    // "sync"
     "time"
 
     "github.com/libp2p/go-libp2p-core/network"
@@ -23,39 +22,12 @@ import (
     "github.com/Multi-Tier-Cloud/common/p2putil"
     "github.com/Multi-Tier-Cloud/hash-lookup/hl-common"
 )
-/*
-type StringMap struct {
-    sync.RWMutex
-    data map[string]string
+
+type serviceData struct {
+    ContentHash string
+    DockerHash string
 }
 
-func NewStringMap() *StringMap {
-    return &StringMap{
-        data: make(map[string]string),
-    }
-}
-
-func (sm *StringMap) Delete(key string) {
-    sm.Lock()
-    delete(sm.data, key)
-    sm.Unlock()
-}
-
-func (sm *StringMap) Load(key string) (value string, ok bool) {
-    sm.RLock()
-    value, ok = sm.data[key]
-    sm.RUnlock()
-    return value, ok
-}
-
-func (sm *StringMap) Store(key, value string) {
-    sm.Lock()
-    sm.data[key] = value
-    sm.Unlock()
-}
-
-var nameToHash = NewStringMap()
-*/
 var etcdCli *clientv3.Client
 
 func main() {
@@ -68,12 +40,11 @@ func main() {
     etcdPeerPortFlag := flag.Int("etcd-peer-port", 2380,
         "Local etcd instance peer port")
     localFlag := flag.Bool("local", false,
-        "For debugging: Run locally and do not connect to bootstrap peers")
+        "For debugging: Run locally and do not connect to bootstrap peers\n" +
+        "(this option overrides the '--bootstrap' flag)")
     bootstrapFlag := flag.String("bootstrap", "",
         "For debugging: Connect to specified bootstrap node multiaddress")
     flag.Parse()
-
-    // nameToHash.Store("hello-there", "test-test-test")
 
     ctx := context.Background()
 
@@ -177,6 +148,7 @@ func handleLookup(stream network.Stream) {
     }
     
     reqStr := strings.TrimSpace(string(data))
+    fmt.Println("Lookup request:", reqStr)
 
     respBytes, err := doLookup(reqStr)
     if err != nil {
@@ -184,30 +156,8 @@ func handleLookup(stream network.Stream) {
         stream.Reset()
         return
     }
-    /*fmt.Println("Lookup request:", reqStr)
-    
-    // contentHash, ok := nameToHash.Load(reqStr)
-    contentHash := ""
-    ok := false
-    ctx := context.Background()
-    resp, err := cli.Get(ctx, reqStr)
-    if err != nil {
-        panic(err)
-    }
-    for _, ev := range resp.Kvs {
-        contentHash = string(ev.Value)
-        ok = true
-    }
+    fmt.Println("Lookup response: ", string(respBytes))
 
-    respInfo := common.LookupResponse{contentHash, "", ok}
-    respBytes, err := json.Marshal(respInfo)
-    if err != nil {
-        fmt.Println(err)
-        stream.Reset()
-        return
-    }
-
-    fmt.Println("Lookup response: ", string(respBytes))*/
     err = p2putil.WriteMsg(stream, respBytes)
     if err != nil {
         fmt.Println(err)
@@ -233,20 +183,26 @@ func handleAdd(stream network.Stream) {
         return
     }
 
-    // nameToHash.Store(reqInfo.ServiceName, reqInfo.ContentHash)
-    ctx := context.Background()
-    putResp, err := etcdCli.Put(ctx, reqInfo.ServiceName, reqInfo.ContentHash)
+    putData := serviceData{reqInfo.ContentHash, reqInfo.DockerHash}
+    putDataBytes, err := json.Marshal(putData)
     if err != nil {
         fmt.Println(err)
         stream.Reset()
         return
     }
-    fmt.Println(putResp)
+
+    ctx := context.Background()
+    _, err = etcdCli.Put(ctx, reqInfo.ServiceName, string(putDataBytes))
+    if err != nil {
+        fmt.Println(err)
+        stream.Reset()
+        return
+    }
     
-    respStr := fmt.Sprintf("Added { %s : %s }",
-        reqInfo.ServiceName, reqInfo.ContentHash)
+    respStr := fmt.Sprintf("Added %s:%s",
+        reqInfo.ServiceName, string(putDataBytes))
     
-    fmt.Println("Lookup response: ", respStr)
+    fmt.Println("Add response: ", respStr)
     err = p2putil.WriteMsg(stream, []byte(respStr))
     if err != nil {
         fmt.Println(err)
@@ -268,35 +224,15 @@ func handleHttpLookup(w http.ResponseWriter, r *http.Request) {
     }
 
     reqStr := pathSegments[2]
+    fmt.Println("Http lookup request:", reqStr)
 
     respBytes, err := doLookup(reqStr)
     if err != nil {
         fmt.Println(err)
         return
     }
-    /*fmt.Println("Lookup request:", reqStr)
-    
-    // contentHash, ok := nameToHash.Load(reqStr)
-    contentHash := ""
-    ok := false
-    ctx := context.Background()
-    resp, err := cli.Get(ctx, reqStr)
-    if err != nil {
-        panic(err)
-    }
-    for _, ev := range resp.Kvs {
-        contentHash = string(ev.Value)
-        ok = true
-    }
+    fmt.Println("Http lookup response: ", string(respBytes))
 
-    respInfo := common.LookupResponse{contentHash, "", ok}
-    respBytes, err := json.Marshal(respInfo)
-    if err != nil {
-        fmt.Println(err)
-        return
-    }
-
-    fmt.Println("Lookup response: ", string(respBytes))*/
     _, err = w.Write(respBytes)
     if err != nil {
         fmt.Println(err)
@@ -305,30 +241,32 @@ func handleHttpLookup(w http.ResponseWriter, r *http.Request) {
 }
 
 func doLookup(reqStr string) (respBytes []byte, err error) {
-    fmt.Println("Lookup request:", reqStr)
-    
-    // contentHash, ok := nameToHash.Load(reqStr)
-    contentHash := ""
+    var getData serviceData
+    // contentHash := ""
     ok := false
 
     ctx := context.Background()
     getResp, err := etcdCli.Get(ctx, reqStr)
     if err != nil {
-        return respBytes, err
+        return nil, err
     }
     for _, kv := range getResp.Kvs {
-        contentHash = string(kv.Value)
+        err = json.Unmarshal(kv.Value, &getData)
+        if err != nil {
+            return nil, err
+        }
+        // contentHash = string(kv.Value)
         ok = true
         break
     }
 
-    respInfo := common.LookupResponse{contentHash, "", ok}
+    respInfo := common.LookupResponse{
+        getData.ContentHash, getData.DockerHash, ok}
     respBytes, err = json.Marshal(respInfo)
     if err != nil {
-        return respBytes, err
+        return nil, err
     }
 
-    fmt.Println("Lookup response: ", string(respBytes))
     return respBytes, nil
 }
 
@@ -412,7 +350,7 @@ func addEtcdMember(newMemName, newMemPeerUrl string) (
     initialCluster string, err error) {
 
     ctx := context.Background()
-    memAddResp, err := etcdCli.MemberAdd(ctx, []string{newMemPeerUrl/*"http://localhost:3333"*/})
+    memAddResp, err := etcdCli.MemberAdd(ctx, []string{newMemPeerUrl})
     if err != nil {
         return "", nil
     }
@@ -434,27 +372,4 @@ func addEtcdMember(newMemName, newMemPeerUrl string) (
     initialCluster = strings.Join(clusterPeerUrls, ",")
 
     return initialCluster, nil
-    // fmt.Println("added member.Name:", mresp.Member.Name)
-    // fmt.Println("added member.PeerURLs:", mresp.Member.PeerURLs)
-    // for _, mem := range(mresp.Members) {
-    //     fmt.Println("name:", mem.Name, "peer:", mem.PeerURLs)
-    // }
-
-    /*
-        conf := []string{}
-		for _, memb := range resp.Members {
-			for _, u := range memb.PeerURLs {
-				n := memb.Name
-				if memb.ID == newID {
-					n = newMemberName
-				}
-				conf = append(conf, fmt.Sprintf("%s=%s", n, u))
-			}
-		}
-
-		fmt.Print("\n")
-		fmt.Printf("ETCD_NAME=%q\n", newMemberName)
-		fmt.Printf("ETCD_INITIAL_CLUSTER=%q\n", strings.Join(conf, ","))
-		fmt.Printf("ETCD_INITIAL_ADVERTISE_PEER_URLS=%q\n", memberPeerURLs)
-    */
 }
