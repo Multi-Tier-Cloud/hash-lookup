@@ -291,7 +291,6 @@ func getCmd() {
         node.RoutingDiscovery, getFlags.Arg(0))
 
 
-    // contentHash, _, err := hashlookup.GetHash(os.Args[2])
     if err != nil {
         panic(err)
     }

@@ -28,8 +28,6 @@ type serviceData struct {
     DockerHash string
 }
 
-var etcdCli *clientv3.Client
-
 func main() {
     newEtcdClusterFlag := flag.Bool("new-etcd-cluster", false,
         "Start running new etcd cluster")
@@ -61,7 +59,7 @@ func main() {
     clusterState := "new"
 
     var err error
-
+    
     if !(*newEtcdClusterFlag) {
         initialCluster, err = sendMemberAddRequest(
             etcdName, etcdPeerUrl, *localFlag, *bootstrapFlag)
@@ -92,7 +90,7 @@ func main() {
         }
     }()
 
-    etcdCli, err = clientv3.New(clientv3.Config{
+    etcdCli, err := clientv3.New(clientv3.Config{
         Endpoints: []string{etcdClientEndpoint},
         DialTimeout: 5 * time.Second,
     })
@@ -114,7 +112,7 @@ func main() {
         nodeConfig.BootstrapPeers = []string{*bootstrapFlag}
     }
     nodeConfig.StreamHandlers = append(nodeConfig.StreamHandlers,
-        handleLookup, handleAdd, handleMemberAdd)
+        handleLookup(etcdCli), handleAdd(etcdCli), handleMemberAdd(etcdCli))
     nodeConfig.HandlerProtocolIDs = append(nodeConfig.HandlerProtocolIDs,
         common.LookupProtocolID, common.AddProtocolID, memberAddProtocolID)
     nodeConfig.Rendezvous = append(nodeConfig.Rendezvous,
@@ -128,8 +126,8 @@ func main() {
 
     fmt.Println("Host ID:", node.Host.ID())
     fmt.Println("Listening on:", node.Host.Addrs())
-    
-    http.HandleFunc(common.HttpLookupRoute, handleHttpLookup)
+
+    http.HandleFunc(common.HttpLookupRoute, handleHttpLookup(etcdCli))
     go func() {
         fmt.Println("Listening for HTTP requests on port 8080")
         fmt.Println(http.ListenAndServe(":8080", nil))
@@ -140,109 +138,118 @@ func main() {
     select {}
 }
 
-func handleLookup(stream network.Stream) {
-    data, err := p2putil.ReadMsg(stream)
-    if err != nil {
-        fmt.Println(err)
-        return
-    }
-    
-    reqStr := strings.TrimSpace(string(data))
-    fmt.Println("Lookup request:", reqStr)
+func handleLookup(etcdCli *clientv3.Client) func(network.Stream) {
+    return func(stream network.Stream) {
+        data, err := p2putil.ReadMsg(stream)
+        if err != nil {
+            fmt.Println(err)
+            return
+        }
+        
+        reqStr := strings.TrimSpace(string(data))
+        fmt.Println("Lookup request:", reqStr)
 
-    respBytes, err := doLookup(reqStr)
-    if err != nil {
-        fmt.Println(err)
-        stream.Reset()
-        return
-    }
-    fmt.Println("Lookup response: ", string(respBytes))
+        respBytes, err := doLookup(etcdCli, reqStr)
+        if err != nil {
+            fmt.Println(err)
+            stream.Reset()
+            return
+        }
+        fmt.Println("Lookup response: ", string(respBytes))
 
-    err = p2putil.WriteMsg(stream, respBytes)
-    if err != nil {
-        fmt.Println(err)
-        return
-    }
-}
-
-func handleAdd(stream network.Stream) {
-    data, err := p2putil.ReadMsg(stream)
-    if err != nil {
-        fmt.Println(err)
-        return
-    }
-    
-    reqStr := strings.TrimSpace(string(data))
-    fmt.Println("Add request:", reqStr)
-
-    var reqInfo common.AddRequest
-    err = json.Unmarshal([]byte(reqStr), &reqInfo)
-    if err != nil {
-        fmt.Println(err)
-        stream.Reset()
-        return
-    }
-
-    putData := serviceData{reqInfo.ContentHash, reqInfo.DockerHash}
-    putDataBytes, err := json.Marshal(putData)
-    if err != nil {
-        fmt.Println(err)
-        stream.Reset()
-        return
-    }
-
-    ctx := context.Background()
-    _, err = etcdCli.Put(ctx, reqInfo.ServiceName, string(putDataBytes))
-    if err != nil {
-        fmt.Println(err)
-        stream.Reset()
-        return
-    }
-    
-    respStr := fmt.Sprintf("Added %s:%s",
-        reqInfo.ServiceName, string(putDataBytes))
-    
-    fmt.Println("Add response: ", respStr)
-    err = p2putil.WriteMsg(stream, []byte(respStr))
-    if err != nil {
-        fmt.Println(err)
-        return
+        err = p2putil.WriteMsg(stream, respBytes)
+        if err != nil {
+            fmt.Println(err)
+            return
+        }
     }
 }
 
-func handleHttpLookup(w http.ResponseWriter, r *http.Request) {
-    path, err := url.PathUnescape(r.URL.Path)
-    if err != nil {
-        fmt.Println(err)
-        return
-    }
+func handleAdd(etcdCli *clientv3.Client) func(network.Stream) {
+    return func(stream network.Stream) {
+        data, err := p2putil.ReadMsg(stream)
+        if err != nil {
+            fmt.Println(err)
+            return
+        }
+        
+        reqStr := strings.TrimSpace(string(data))
+        fmt.Println("Add request:", reqStr)
 
-    pathSegments := strings.Split(path, "/")
-    if len(pathSegments) < 3 {
-        fmt.Println("No query found in URL")
-        return
-    }
+        var reqInfo common.AddRequest
+        err = json.Unmarshal([]byte(reqStr), &reqInfo)
+        if err != nil {
+            fmt.Println(err)
+            stream.Reset()
+            return
+        }
 
-    reqStr := pathSegments[2]
-    fmt.Println("Http lookup request:", reqStr)
+        putData := serviceData{reqInfo.ContentHash, reqInfo.DockerHash}
+        putDataBytes, err := json.Marshal(putData)
+        if err != nil {
+            fmt.Println(err)
+            stream.Reset()
+            return
+        }
 
-    respBytes, err := doLookup(reqStr)
-    if err != nil {
-        fmt.Println(err)
-        return
-    }
-    fmt.Println("Http lookup response: ", string(respBytes))
-
-    _, err = w.Write(respBytes)
-    if err != nil {
-        fmt.Println(err)
-        return
+        ctx := context.Background()
+        _, err = etcdCli.Put(ctx, reqInfo.ServiceName, string(putDataBytes))
+        if err != nil {
+            fmt.Println(err)
+            stream.Reset()
+            return
+        }
+        
+        respStr := fmt.Sprintf("Added %s:%s",
+            reqInfo.ServiceName, string(putDataBytes))
+        
+        fmt.Println("Add response: ", respStr)
+        err = p2putil.WriteMsg(stream, []byte(respStr))
+        if err != nil {
+            fmt.Println(err)
+            return
+        }
     }
 }
 
-func doLookup(reqStr string) (respBytes []byte, err error) {
+func handleHttpLookup(
+    etcdCli *clientv3.Client) (func(http.ResponseWriter, *http.Request)) {
+
+    return func(w http.ResponseWriter, r *http.Request) {
+        path, err := url.PathUnescape(r.URL.Path)
+        if err != nil {
+            fmt.Println(err)
+            return
+        }
+
+        pathSegments := strings.Split(path, "/")
+        if len(pathSegments) < 3 {
+            fmt.Println("No query found in URL")
+            return
+        }
+
+        reqStr := pathSegments[2]
+        fmt.Println("Http lookup request:", reqStr)
+
+        respBytes, err := doLookup(etcdCli, reqStr)
+        if err != nil {
+            fmt.Println(err)
+            return
+        }
+        fmt.Println("Http lookup response: ", string(respBytes))
+
+        _, err = w.Write(respBytes)
+        if err != nil {
+            fmt.Println(err)
+            return
+        }
+    }
+}
+
+func doLookup(etcdCli *clientv3.Client, reqStr string) (
+    respBytes []byte, err error) {
+
     var getData serviceData
-    // contentHash := ""
     ok := false
 
     ctx := context.Background()
@@ -255,7 +262,6 @@ func doLookup(reqStr string) (respBytes []byte, err error) {
         if err != nil {
             return nil, err
         }
-        // contentHash = string(kv.Value)
         ok = true
         break
     }
@@ -312,41 +318,44 @@ func sendMemberAddRequest(
     return initialCluster, nil
 }
 
-func handleMemberAdd(stream network.Stream) {
-    data, err := p2putil.ReadMsg(stream)
-    if err != nil {
-        fmt.Println(err)
-        return
-    }
-    
-    reqStr := strings.TrimSpace(string(data))
-    fmt.Println("Member add request:", reqStr)
+func handleMemberAdd(etcdCli *clientv3.Client) func(network.Stream) {
+    return func(stream network.Stream) {
+        data, err := p2putil.ReadMsg(stream)
+        if err != nil {
+            fmt.Println(err)
+            return
+        }
+        
+        reqStr := strings.TrimSpace(string(data))
+        fmt.Println("Member add request:", reqStr)
 
-    var reqInfo memberAddRequest
-    err = json.Unmarshal([]byte(reqStr), &reqInfo)
-    if err != nil {
-        fmt.Println(err)
-        stream.Reset()
-        return
-    }
+        var reqInfo memberAddRequest
+        err = json.Unmarshal([]byte(reqStr), &reqInfo)
+        if err != nil {
+            fmt.Println(err)
+            stream.Reset()
+            return
+        }
 
-    initialCluster, err := addEtcdMember(
-        reqInfo.MemberName, reqInfo.MemberPeerUrl)
-    if err != nil {
-        fmt.Println(err)
-        stream.Reset()
-        return
-    }
-    
-    fmt.Println("Member add response: ", initialCluster)
-    err = p2putil.WriteMsg(stream, []byte(initialCluster))
-    if err != nil {
-        fmt.Println(err)
-        return
+        initialCluster, err := addEtcdMember(
+            etcdCli, reqInfo.MemberName, reqInfo.MemberPeerUrl)
+        if err != nil {
+            fmt.Println(err)
+            stream.Reset()
+            return
+        }
+        
+        fmt.Println("Member add response: ", initialCluster)
+        err = p2putil.WriteMsg(stream, []byte(initialCluster))
+        if err != nil {
+            fmt.Println(err)
+            return
+        }
     }
 }
 
-func addEtcdMember(newMemName, newMemPeerUrl string) (
+func addEtcdMember(
+    etcdCli *clientv3.Client, newMemName, newMemPeerUrl string) (
     initialCluster string, err error) {
 
     ctx := context.Background()
