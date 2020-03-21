@@ -4,6 +4,8 @@ import (
     "context"
     "errors"
     "fmt"
+    "math"
+    "time"
 
     "github.com/libp2p/go-libp2p-core/host"
     "github.com/libp2p/go-libp2p-core/protocol"
@@ -37,35 +39,49 @@ func SendRequestWithHostRouting(ctx context.Context,
     protocolID protocol.ID, request []byte) (
     response []byte, err error) {
 
-    peerChan, err := routingDiscovery.FindPeers(
-        ctx, HashLookupRendezvousString)
-    if err != nil {
-        return nil, err
-    }
-
-    for peer := range peerChan {
-        if peer.ID == host.ID() {
-            continue
+    maxConnAttempts := 5
+    for connAttempts := 0; connAttempts < maxConnAttempts; connAttempts++ {
+        // Perform simple exponential backoff
+        if connAttempts > 0 {
+            sleepDuration := int(math.Pow(2, float64(connAttempts)))
+            for i := 0; i < sleepDuration; i++ {
+                fmt.Println(
+                    "Unable to connect to any peers, retrying in %d seconds",
+                    sleepDuration - i)
+                time.Sleep(time.Second)
+            }
         }
 
-        fmt.Println("Connecting to:", peer)
-        stream, err := host.NewStream(ctx, peer.ID, protocolID)
-        if err != nil {
-            fmt.Println("Connection failed:", err)
-            continue
-        }
-
-        err = p2putil.WriteMsg(stream, request)
+        peerChan, err := routingDiscovery.FindPeers(
+            ctx, HashLookupRendezvousString)
         if err != nil {
             return nil, err
         }
 
-        response, err := p2putil.ReadMsg(stream)
-        if err != nil {
-            return nil, err
-        }
+        for peer := range peerChan {
+            if peer.ID == host.ID() {
+                continue
+            }
 
-        return response, nil
+            fmt.Println("Connecting to:", peer)
+            stream, err := host.NewStream(ctx, peer.ID, protocolID)
+            if err != nil {
+                fmt.Println("Connection failed:", err)
+                continue
+            }
+
+            err = p2putil.WriteMsg(stream, request)
+            if err != nil {
+                return nil, err
+            }
+
+            response, err := p2putil.ReadMsg(stream)
+            if err != nil {
+                return nil, err
+            }
+
+            return response, nil
+        }
     }
 
     return nil, errors.New(

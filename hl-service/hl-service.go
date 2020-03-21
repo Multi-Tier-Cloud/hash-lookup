@@ -23,7 +23,7 @@ import (
     "github.com/Multi-Tier-Cloud/hash-lookup/hl-common"
 )
 
-type serviceData struct {
+type etcdData struct {
     ContentHash string
     DockerHash string
 }
@@ -99,7 +99,13 @@ func main() {
     }
     defer etcdCli.Close()
 
-    putResp, err := etcdCli.Put(ctx, "hello-there", "general-kenobi")
+    testData := etcdData{"general", "kenobi"}
+    testDataBytes, err := json.Marshal(testData)
+    if err != nil {
+        panic(err)
+        return
+    }
+    putResp, err := etcdCli.Put(ctx, "hello-there", string(testDataBytes))
     if err != nil {
         panic(err)
     }
@@ -184,7 +190,7 @@ func handleAdd(etcdCli *clientv3.Client) func(network.Stream) {
             return
         }
 
-        putData := serviceData{reqInfo.ContentHash, reqInfo.DockerHash}
+        putData := etcdData{reqInfo.ContentHash, reqInfo.DockerHash}
         putDataBytes, err := json.Marshal(putData)
         if err != nil {
             fmt.Println(err)
@@ -249,7 +255,7 @@ func handleHttpLookup(
 func doLookup(etcdCli *clientv3.Client, reqStr string) (
     respBytes []byte, err error) {
 
-    var getData serviceData
+    var getData etcdData
     ok := false
 
     ctx := context.Background()
