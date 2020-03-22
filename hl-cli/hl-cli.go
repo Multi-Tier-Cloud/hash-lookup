@@ -287,17 +287,40 @@ func getCmd() {
     defer node.Host.Close()
     defer node.DHT.Close()
 
-    contentHash, _, err := hashlookup.GetHashWithHostRouting(ctx, node.Host,
-        node.RoutingDiscovery, getFlags.Arg(0))
+    contentHash, dockerHash, err := hashlookup.GetHashWithHostRouting(
+        ctx, node.Host, node.RoutingDiscovery, getFlags.Arg(0))
 
 
     if err != nil {
         panic(err)
     }
-    fmt.Println("Response:", contentHash)
+    fmt.Println(
+        "Response: Content Hash:", contentHash, ", Docker Hash:", dockerHash)
 }
 
-func listCmd() {}
+func listCmd() {
+    listFlags := flag.NewFlagSet("list", flag.ExitOnError)
+    bootstrapFlag := listFlags.String("bootstrap", "",
+        "For debugging: Connect to specified bootstrap node multiaddress")
+    listFlags.Parse(os.Args[2:])
+
+    data, err := sendRequest(common.ListProtocolID, []byte{}, *bootstrapFlag)
+    if err != nil {
+        panic(err)
+    }
+
+    var respInfo common.ListResponse
+    err = json.Unmarshal(data, &respInfo)
+    if err != nil {
+        panic(err)
+    }
+
+    fmt.Println("Response:")
+    for i := 0; i < len(respInfo.ContentHashes); i++ {
+        fmt.Println("Content Hash:", respInfo.ContentHashes[i],
+            ", Docker Hash:", respInfo.DockerHashes[i])
+    }
+}
 
 func sendRequest(protocolID protocol.ID, request []byte, bootstrap string) (
     response []byte, err error) {

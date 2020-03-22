@@ -6,8 +6,10 @@ replace github.com/Multi-Tier-Cloud/hash-lookup/hashlookup => ./hashlookup
 
 replace github.com/Multi-Tier-Cloud/hash-lookup/hl-common => ./hl-common
 
+require github.com/Multi-Tier-Cloud/common v0.0.0-20200221061654-36f119e42422
+
 require (
-	github.com/Multi-Tier-Cloud/common v0.0.0-20200309021533-0128c0bbff6d
+	//github.com/Multi-Tier-Cloud/common v0.0.0-20200309021533-0128c0bbff6d
 	github.com/ipfs/go-blockservice v0.1.2
 	github.com/ipfs/go-ipfs v0.4.22-0.20200219161038-21f6e19f2f37
 	github.com/ipfs/go-ipfs-files v0.0.6

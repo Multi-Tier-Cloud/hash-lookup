@@ -20,6 +20,12 @@ type LookupResponse struct {
     LookupOk bool
 }
 
+type ListResponse struct {
+    ContentHashes []string
+    DockerHashes []string
+    LookupOk bool
+}
+
 type AddRequest struct {
     ServiceName string
     ContentHash string
@@ -29,6 +35,8 @@ type AddRequest struct {
 var HashLookupRendezvousString string = "hash-lookup";
 
 var LookupProtocolID protocol.ID = "/lookup/1.0";
+
+var ListProtocolID protocol.ID = "/list/1.0";
 
 var AddProtocolID protocol.ID = "/add/1.0";
 
@@ -45,11 +53,12 @@ func SendRequestWithHostRouting(ctx context.Context,
         if connAttempts > 0 {
             sleepDuration := int(math.Pow(2, float64(connAttempts)))
             for i := 0; i < sleepDuration; i++ {
-                fmt.Println(
-                    "Unable to connect to any peers, retrying in %d seconds",
+                fmt.Printf("\rUnable to connect to any peers, " +
+                    "retrying in %d seconds...     ",
                     sleepDuration - i)
                 time.Sleep(time.Second)
             }
+            fmt.Println()
         }
 
         peerChan, err := routingDiscovery.FindPeers(

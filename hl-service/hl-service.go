@@ -118,14 +118,20 @@ func main() {
         nodeConfig.BootstrapPeers = []string{*bootstrapFlag}
     }
     nodeConfig.StreamHandlers = append(nodeConfig.StreamHandlers,
-        handleLookup(etcdCli), handleAdd(etcdCli), handleMemberAdd(etcdCli))
+        handleLookup(etcdCli), handleList(etcdCli), handleAdd(etcdCli),
+        handleMemberAdd(etcdCli))
     nodeConfig.HandlerProtocolIDs = append(nodeConfig.HandlerProtocolIDs,
-        common.LookupProtocolID, common.AddProtocolID, memberAddProtocolID)
+        common.LookupProtocolID, common.ListProtocolID, common.AddProtocolID,
+        memberAddProtocolID)
     nodeConfig.Rendezvous = append(nodeConfig.Rendezvous,
         common.HashLookupRendezvousString)
     node, err := p2pnode.NewNode(ctx, nodeConfig)
     if err != nil {
-        panic(err)
+        if *localFlag && err.Error() == "Failed to connect to any bootstraps" {
+            fmt.Println("Local run, not connecting to bootstraps")
+        } else {
+            panic(err)
+        }
     }
     defer node.Host.Close()
     defer node.DHT.Close()
@@ -155,13 +161,51 @@ func handleLookup(etcdCli *clientv3.Client) func(network.Stream) {
         reqStr := strings.TrimSpace(string(data))
         fmt.Println("Lookup request:", reqStr)
 
-        respBytes, err := doLookup(etcdCli, reqStr)
+        contentHash, dockerHash, ok, err := lookupServiceHash(etcdCli, reqStr)
         if err != nil {
             fmt.Println(err)
             stream.Reset()
             return
         }
+
+        respInfo := common.LookupResponse{contentHash, dockerHash, ok}
+        respBytes, err := json.Marshal(respInfo)
+        if err != nil {
+            fmt.Println(err)
+            stream.Reset()
+            return
+        }
+
         fmt.Println("Lookup response: ", string(respBytes))
+
+        err = p2putil.WriteMsg(stream, respBytes)
+        if err != nil {
+            fmt.Println(err)
+            return
+        }
+    }
+}
+
+func handleList(etcdCli *clientv3.Client) func(network.Stream) {
+    return func(stream network.Stream) {
+        fmt.Println("List request")
+
+        contentHashes, dockerHashes, ok, err := listServiceHashes(etcdCli)
+        if err != nil {
+            fmt.Println(err)
+            stream.Reset()
+            return
+        }
+
+        respInfo := common.ListResponse{contentHashes, dockerHashes, ok}
+        respBytes, err := json.Marshal(respInfo)
+        if err != nil {
+            fmt.Println(err)
+            stream.Reset()
+            return
+        }
+
+        fmt.Println("List response: ", string(respBytes))
 
         err = p2putil.WriteMsg(stream, respBytes)
         if err != nil {
@@ -237,11 +281,19 @@ func handleHttpLookup(
         reqStr := pathSegments[2]
         fmt.Println("Http lookup request:", reqStr)
 
-        respBytes, err := doLookup(etcdCli, reqStr)
+        contentHash, dockerHash, ok, err := lookupServiceHash(etcdCli, reqStr)
         if err != nil {
             fmt.Println(err)
             return
         }
+
+        respInfo := common.LookupResponse{contentHash, dockerHash, ok}
+        respBytes, err := json.Marshal(respInfo)
+        if err != nil {
+            fmt.Println(err)
+            return
+        }
+
         fmt.Println("Http lookup response: ", string(respBytes))
 
         _, err = w.Write(respBytes)
@@ -252,34 +304,51 @@ func handleHttpLookup(
     }
 }
 
-func doLookup(etcdCli *clientv3.Client, reqStr string) (
-    respBytes []byte, err error) {
+func lookupServiceHash(etcdCli *clientv3.Client, query string) (
+    contentHash, dockerHash string, ok bool, err error) {
+    
+    contentHashes, dockerHashes, ok, err := etcdGet(etcdCli, query, false)
+    if len(contentHashes) > 0 {
+        contentHash = contentHashes[0]
+    }
+    if len(dockerHashes) > 0 {
+        dockerHash = dockerHashes[0]
+    }
+    return contentHash, dockerHash, ok, err
+}
 
-    var getData etcdData
-    ok := false
+func listServiceHashes(etcdCli *clientv3.Client) (
+    contentHashes, dockerHashes []string, ok bool, err error) {
+    
+    return etcdGet(etcdCli, "", true)
+}
+
+func etcdGet(etcdCli *clientv3.Client, query string, withPrefix bool) (
+    contentHashes, dockerHashes []string, queryOk bool, err error) {
 
     ctx := context.Background()
-    getResp, err := etcdCli.Get(ctx, reqStr)
-    if err != nil {
-        return nil, err
+    var getResp *clientv3.GetResponse
+    if withPrefix {
+        getResp, err = etcdCli.Get(ctx, query, clientv3.WithPrefix())
+    } else {
+        getResp, err = etcdCli.Get(ctx, query)
     }
+    if err != nil {
+        return contentHashes, dockerHashes, queryOk, err
+    }
+
+    queryOk = len(getResp.Kvs) > 0
     for _, kv := range getResp.Kvs {
+        var getData etcdData
         err = json.Unmarshal(kv.Value, &getData)
         if err != nil {
-            return nil, err
+            return contentHashes, dockerHashes, queryOk, err
         }
-        ok = true
-        break
+        contentHashes = append(contentHashes, getData.ContentHash)
+        dockerHashes = append(dockerHashes, getData.DockerHash)
     }
 
-    respInfo := common.LookupResponse{
-        getData.ContentHash, getData.DockerHash, ok}
-    respBytes, err = json.Marshal(respInfo)
-    if err != nil {
-        return nil, err
-    }
-
-    return respBytes, nil
+    return contentHashes, dockerHashes, queryOk, nil
 }
 
 type memberAddRequest struct {
