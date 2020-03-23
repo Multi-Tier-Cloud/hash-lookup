@@ -104,9 +104,12 @@ func addCmd() {
 
     addUsage := func() {
         exeName := getExeName()
-        fmt.Fprintln(os.Stderr, "Usage:", exeName, "add [<options>] <name>")
+        fmt.Fprintln(os.Stderr, "Usage:", exeName, "add [<options>] <docker-id> <name>")
         fmt.Fprintln(os.Stderr,
 `
+<docker-id>
+        Dockerhub ID of microservice (<username>/<repository>@sha256:<hash>)
+
 <name>
         Name of microservice to associate hashed content with
 
@@ -117,13 +120,13 @@ func addCmd() {
     addFlags.Usage = addUsage
     addFlags.Parse(os.Args[2:])
     
-    if len(addFlags.Args()) < 1 {
-        fmt.Fprintln(os.Stderr, "Error: missing required argument <name>")
+    if len(addFlags.Args()) < 2 {
+        fmt.Fprintln(os.Stderr, "Error: missing required arguments")
         addUsage()
         return
     }
 
-    if len(addFlags.Args()) > 1 {
+    if len(addFlags.Args()) > 2 {
         fmt.Fprintln(os.Stderr, "Error: too many arguments")
         addUsage()
         return
@@ -162,8 +165,11 @@ func addCmd() {
         return
     }
 
-    fmt.Println("Adding {", addFlags.Arg(0), ":", hash, "}")
-    reqInfo := common.AddRequest{addFlags.Arg(0), hash, ""}
+    dockerId := addFlags.Arg(0)
+    serviceName := addFlags.Arg(1)
+    fmt.Printf("Adding %s:{ContentHash:%s, DockerHash:%s}\n",
+        serviceName, hash, dockerId)
+    reqInfo := common.AddRequest{serviceName, hash, dockerId}
     reqBytes, err := json.Marshal(reqInfo)
     if err != nil {
         panic(err)
