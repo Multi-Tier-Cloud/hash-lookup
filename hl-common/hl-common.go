@@ -40,8 +40,6 @@ var ListProtocolID protocol.ID = "/list/1.0";
 
 var AddProtocolID protocol.ID = "/add/1.0";
 
-var HttpLookupRoute string = "/lookup/"
-
 func SendRequestWithHostRouting(ctx context.Context,
     host host.Host, routingDiscovery *discovery.RoutingDiscovery,
     protocolID protocol.ID, request []byte) (

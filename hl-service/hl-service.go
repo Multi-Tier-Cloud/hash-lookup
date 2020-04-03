@@ -5,8 +5,6 @@ import (
     "encoding/json"
     "flag"
     "fmt"
-    "net/http"
-    "net/url"
     "os"
     "os/exec"
     "strconv"
@@ -136,14 +134,8 @@ func main() {
     defer node.Host.Close()
     defer node.DHT.Close()
 
-    fmt.Println("Host ID:", node.Host.ID())
-    fmt.Println("Listening on:", node.Host.Addrs())
-
-    http.HandleFunc(common.HttpLookupRoute, handleHttpLookup(etcdCli))
-    go func() {
-        fmt.Println("Listening for HTTP requests on port 8080")
-        fmt.Println(http.ListenAndServe(":8080", nil))
-    }()
+    // fmt.Println("Host ID:", node.Host.ID())
+    // fmt.Println("Listening on:", node.Host.Addrs())
     
     fmt.Println("Waiting to serve connections...")
 
@@ -255,48 +247,6 @@ func handleAdd(etcdCli *clientv3.Client) func(network.Stream) {
         
         fmt.Println("Add response: ", respStr)
         err = p2putil.WriteMsg(stream, []byte(respStr))
-        if err != nil {
-            fmt.Println(err)
-            return
-        }
-    }
-}
-
-func handleHttpLookup(
-    etcdCli *clientv3.Client) (func(http.ResponseWriter, *http.Request)) {
-
-    return func(w http.ResponseWriter, r *http.Request) {
-        path, err := url.PathUnescape(r.URL.Path)
-        if err != nil {
-            fmt.Println(err)
-            return
-        }
-
-        pathSegments := strings.Split(path, "/")
-        if len(pathSegments) < 3 {
-            fmt.Println("No query found in URL")
-            return
-        }
-
-        reqStr := pathSegments[2]
-        fmt.Println("Http lookup request:", reqStr)
-
-        contentHash, dockerHash, ok, err := lookupServiceHash(etcdCli, reqStr)
-        if err != nil {
-            fmt.Println(err)
-            return
-        }
-
-        respInfo := common.LookupResponse{contentHash, dockerHash, ok}
-        respBytes, err := json.Marshal(respInfo)
-        if err != nil {
-            fmt.Println(err)
-            return
-        }
-
-        fmt.Println("Http lookup response: ", string(respBytes))
-
-        _, err = w.Write(respBytes)
         if err != nil {
             fmt.Println(err)
             return
