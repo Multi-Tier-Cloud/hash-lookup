@@ -4,9 +4,6 @@ import (
     "context"
     "encoding/json"
     "errors"
-    "io/ioutil"
-    "net/http"
-    "net/url"
 
     "github.com/libp2p/go-libp2p-core/host"
     "github.com/libp2p/go-libp2p-discovery"

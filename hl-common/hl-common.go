@@ -14,6 +14,15 @@ import (
     "github.com/Multi-Tier-Cloud/common/p2putil"
 )
 
+const (
+    HashLookupRendezvousString string = "hash-lookup";
+
+    LookupProtocolID protocol.ID = "/lookup/1.0";
+    ListProtocolID protocol.ID = "/list/1.0";
+    AddProtocolID protocol.ID = "/add/1.0";
+    DeleteProtocolID protocol.ID = "/delete/1.0";
+)
+
 type LookupResponse struct {
     ContentHash string
     DockerHash string
@@ -21,6 +30,7 @@ type LookupResponse struct {
 }
 
 type ListResponse struct {
+    ServiceNames []string
     ContentHashes []string
     DockerHashes []string
     LookupOk bool
@@ -31,14 +41,6 @@ type AddRequest struct {
     ContentHash string
     DockerHash string
 }
-
-var HashLookupRendezvousString string = "hash-lookup";
-
-var LookupProtocolID protocol.ID = "/lookup/1.0";
-
-var ListProtocolID protocol.ID = "/list/1.0";
-
-var AddProtocolID protocol.ID = "/add/1.0";
 
 func SendRequestWithHostRouting(ctx context.Context,
     host host.Host, routingDiscovery *discovery.RoutingDiscovery,

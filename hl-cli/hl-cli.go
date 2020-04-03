@@ -40,13 +40,18 @@ var commands = []commandData{
     },
     commandData{
         "get",
-        "Get the content hash of a microservice from the hash-lookup service",
+        "Get the content hash and Docker ID of a microservice",
         getCmd,
     },
     commandData{
         "list",
-        "List all microservices and hashes stored by the hash-lookup service",
+        "List all microservices and data stored by the hash-lookup service",
         listCmd,
+    },
+    commandData{
+        "delete",
+        "Delete a microservice entry",
+        deleteCmd,
     },
 }
 
@@ -280,6 +285,7 @@ func getCmd() {
         return
     }
 
+    serviceName := getFlags.Arg(0)
 
     ctx := context.Background()
     nodeConfig := p2pnode.NewConfig()
@@ -294,7 +300,7 @@ func getCmd() {
     defer node.DHT.Close()
 
     contentHash, dockerHash, err := hashlookup.GetHashWithHostRouting(
-        ctx, node.Host, node.RoutingDiscovery, getFlags.Arg(0))
+        ctx, node.Host, node.RoutingDiscovery, serviceName)
 
 
     if err != nil {
@@ -322,10 +328,55 @@ func listCmd() {
     }
 
     fmt.Println("Response:")
-    for i := 0; i < len(respInfo.ContentHashes); i++ {
-        fmt.Println("Content Hash:", respInfo.ContentHashes[i],
-            ", Docker Hash:", respInfo.DockerHashes[i])
+    for i := 0; i < len(respInfo.ServiceNames); i++ {
+        fmt.Printf("Service Name: %s, Content Hash: %s, Docker Hash: %s\n",
+            respInfo.ServiceNames[i], respInfo.ContentHashes[i],
+            respInfo.DockerHashes[i])
     }
+}
+
+func deleteCmd() {
+    deleteFlags := flag.NewFlagSet("delete", flag.ExitOnError)
+    bootstrapFlag := deleteFlags.String("bootstrap", "",
+        "For debugging: Connect to specified bootstrap node multiaddress")
+
+    deleteUsage := func() {
+        exeName := getExeName()
+        fmt.Fprintln(os.Stderr, "Usage:", exeName, "delete [<options>] <name>")
+        fmt.Fprintln(os.Stderr,
+`
+<name>
+        Name of microservice to delete
+
+<options>`)
+        deleteFlags.PrintDefaults()
+    }
+    
+    deleteFlags.Usage = deleteUsage
+    deleteFlags.Parse(os.Args[2:])
+
+    if len(deleteFlags.Args()) < 1 {
+        fmt.Fprintln(os.Stderr, "Error: missing required argument <name>")
+        deleteUsage()
+        return
+    }
+
+    if len(deleteFlags.Args()) > 1 {
+        fmt.Fprintln(os.Stderr, "Error: too many arguments")
+        deleteUsage()
+        return
+    }
+
+    serviceName := deleteFlags.Arg(0)
+
+    data, err := sendRequest(
+        common.DeleteProtocolID, []byte(serviceName), *bootstrapFlag)
+    if err != nil {
+        panic(err)
+    }
+
+    respStr := strings.TrimSpace(string(data))
+    fmt.Println("Response:", respStr)
 }
 
 func sendRequest(protocolID protocol.ID, request []byte, bootstrap string) (

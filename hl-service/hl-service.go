@@ -117,10 +117,10 @@ func main() {
     }
     nodeConfig.StreamHandlers = append(nodeConfig.StreamHandlers,
         handleLookup(etcdCli), handleList(etcdCli), handleAdd(etcdCli),
-        handleMemberAdd(etcdCli))
+        handleDelete(etcdCli), handleMemberAdd(etcdCli))
     nodeConfig.HandlerProtocolIDs = append(nodeConfig.HandlerProtocolIDs,
         common.LookupProtocolID, common.ListProtocolID, common.AddProtocolID,
-        memberAddProtocolID)
+        common.DeleteProtocolID, memberAddProtocolID)
     nodeConfig.Rendezvous = append(nodeConfig.Rendezvous,
         common.HashLookupRendezvousString)
     node, err := p2pnode.NewNode(ctx, nodeConfig)
@@ -182,14 +182,16 @@ func handleList(etcdCli *clientv3.Client) func(network.Stream) {
     return func(stream network.Stream) {
         fmt.Println("List request")
 
-        contentHashes, dockerHashes, ok, err := listServiceHashes(etcdCli)
+        serviceNames, contentHashes, dockerHashes, ok, err :=
+            listServiceHashes(etcdCli)
         if err != nil {
             fmt.Println(err)
             stream.Reset()
             return
         }
 
-        respInfo := common.ListResponse{contentHashes, dockerHashes, ok}
+        respInfo := common.ListResponse{
+            serviceNames, contentHashes, dockerHashes, ok}
         respBytes, err := json.Marshal(respInfo)
         if err != nil {
             fmt.Println(err)
@@ -254,10 +256,46 @@ func handleAdd(etcdCli *clientv3.Client) func(network.Stream) {
     }
 }
 
+func handleDelete(etcdCli *clientv3.Client) func(network.Stream) {
+    return func(stream network.Stream) {
+        data, err := p2putil.ReadMsg(stream)
+        if err != nil {
+            fmt.Println(err)
+            return
+        }
+        
+        reqStr := strings.TrimSpace(string(data))
+        fmt.Println("Delete request:", reqStr)
+
+        ctx := context.Background()
+        deleteResp, err := etcdCli.Delete(ctx, reqStr)
+        if err != nil {
+            fmt.Println(err)
+            stream.Reset()
+            return
+        }
+
+        var respStr string
+        if deleteResp.Deleted != 0 {
+            respStr = fmt.Sprintf(
+                "Deleted %d entry from hash lookup", deleteResp.Deleted)
+        } else {
+            respStr = "Error: Failed to delete any entries from hash lookup"
+        }
+        
+        fmt.Println("Delete response: ", respStr)
+        err = p2putil.WriteMsg(stream, []byte(respStr))
+        if err != nil {
+            fmt.Println(err)
+            return
+        }
+    }
+}
+
 func lookupServiceHash(etcdCli *clientv3.Client, query string) (
     contentHash, dockerHash string, ok bool, err error) {
     
-    contentHashes, dockerHashes, ok, err := etcdGet(etcdCli, query, false)
+    _, contentHashes, dockerHashes, ok, err := etcdGet(etcdCli, query, false)
     if len(contentHashes) > 0 {
         contentHash = contentHashes[0]
     }
@@ -268,13 +306,14 @@ func lookupServiceHash(etcdCli *clientv3.Client, query string) (
 }
 
 func listServiceHashes(etcdCli *clientv3.Client) (
-    contentHashes, dockerHashes []string, ok bool, err error) {
+    serviceNames, contentHashes, dockerHashes []string, ok bool, err error) {
     
     return etcdGet(etcdCli, "", true)
 }
 
 func etcdGet(etcdCli *clientv3.Client, query string, withPrefix bool) (
-    contentHashes, dockerHashes []string, queryOk bool, err error) {
+    serviceNames, contentHashes, dockerHashes []string, queryOk bool,
+    err error) {
 
     ctx := context.Background()
     var getResp *clientv3.GetResponse
@@ -284,7 +323,7 @@ func etcdGet(etcdCli *clientv3.Client, query string, withPrefix bool) (
         getResp, err = etcdCli.Get(ctx, query)
     }
     if err != nil {
-        return contentHashes, dockerHashes, queryOk, err
+        return serviceNames, contentHashes, dockerHashes, queryOk, err
     }
 
     queryOk = len(getResp.Kvs) > 0
@@ -292,13 +331,14 @@ func etcdGet(etcdCli *clientv3.Client, query string, withPrefix bool) (
         var getData etcdData
         err = json.Unmarshal(kv.Value, &getData)
         if err != nil {
-            return contentHashes, dockerHashes, queryOk, err
+            return serviceNames, contentHashes, dockerHashes, queryOk, err
         }
+        serviceNames = append(serviceNames, string(kv.Key))
         contentHashes = append(contentHashes, getData.ContentHash)
         dockerHashes = append(dockerHashes, getData.DockerHash)
     }
 
-    return contentHashes, dockerHashes, queryOk, nil
+    return serviceNames, contentHashes, dockerHashes, queryOk, nil
 }
 
 type memberAddRequest struct {

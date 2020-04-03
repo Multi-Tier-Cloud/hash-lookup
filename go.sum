@@ -12,6 +12,8 @@ github.com/Multi-Tier-Cloud/common v0.0.0-20200221061654-36f119e42422 h1:pKfyWxn
 github.com/Multi-Tier-Cloud/common v0.0.0-20200221061654-36f119e42422/go.mod h1:mYfgQ8NGzZk6T8yQJWkRxgoH/BTgytCYhmljAcIpc/g=
 github.com/Multi-Tier-Cloud/common v0.0.0-20200309021533-0128c0bbff6d h1:5GGbz1sP9CKSuRG5oN565hQIuxhg1u3xgqDT2xkUqQc=
 github.com/Multi-Tier-Cloud/common v0.0.0-20200309021533-0128c0bbff6d/go.mod h1:mYfgQ8NGzZk6T8yQJWkRxgoH/BTgytCYhmljAcIpc/g=
+github.com/Multi-Tier-Cloud/common v0.0.0-20200403032527-d7311ad845b4 h1:V+xAGhoMaqOwfXEEFU6Kr7JVldjrEQRvvMmJ0krQ3qY=
+github.com/Multi-Tier-Cloud/common v0.0.0-20200403032527-d7311ad845b4/go.mod h1:mYfgQ8NGzZk6T8yQJWkRxgoH/BTgytCYhmljAcIpc/g=
 github.com/Stebalien/go-bitfield v0.0.0-20180330043415-076a62f9ce6e/go.mod h1:3oM7gXIttpYDAJXpVNnSCiUMYBLIZ6cb1t+Ip982MRo=
 github.com/Stebalien/go-bitfield v0.0.1 h1:X3kbSSPUaJK60wV2hjOPZwmpljr6VGCqdq4cBLhbQBo=
 github.com/Stebalien/go-bitfield v0.0.1/go.mod h1:GNjFpasyUVkHMsfEOk8EFLJ9syQ6SI+XWrX9Wf2XH0s=
