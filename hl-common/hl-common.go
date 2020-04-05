@@ -15,12 +15,12 @@ import (
 )
 
 const (
-    HashLookupRendezvousString string = "hash-lookup";
+    HashLookupRendezvousString string = "hash-lookup"
 
-    LookupProtocolID protocol.ID = "/lookup/1.0";
-    ListProtocolID protocol.ID = "/list/1.0";
-    AddProtocolID protocol.ID = "/add/1.0";
-    DeleteProtocolID protocol.ID = "/delete/1.0";
+    LookupProtocolID protocol.ID = "/lookup/1.0"
+    ListProtocolID protocol.ID = "/list/1.0"
+    AddProtocolID protocol.ID = "/add/1.0"
+    DeleteProtocolID protocol.ID = "/delete/1.0"
 )
 
 type LookupResponse struct {
