@@ -8,23 +8,59 @@ import (
     "github.com/libp2p/go-libp2p-core/host"
     "github.com/libp2p/go-libp2p-discovery"
 
-    "github.com/Multi-Tier-Cloud/common/p2pnode"
     "github.com/Multi-Tier-Cloud/hash-lookup/hl-common"
 )
 
+func AddHash(serviceName, hash, dockerId string) (
+    addResponse string, err error) {
+
+    reqBytes, err := marshalAddRequest(serviceName, hash, dockerId)
+    if err != nil {
+        return "", err
+    }
+
+    response, err := common.SendRequest(common.AddProtocolID, reqBytes)
+    if err != nil {
+        return "", err
+    }
+
+    return string(response), nil
+}
+
+func AddHashWithHostRouting(
+    ctx context.Context, host host.Host,
+    routingDiscovery *discovery.RoutingDiscovery,
+    serviceName, hash, dockerId string) (
+    addResponse string, err error) {
+
+    reqBytes, err := marshalAddRequest(serviceName, hash, dockerId)
+    if err != nil {
+        return "", err
+    }
+
+    data, err := common.SendRequestWithHostRouting(
+        ctx, host, routingDiscovery, common.AddProtocolID, reqBytes)
+    if err != nil {
+        return "", err
+    }
+
+    return string(data), nil
+}
+
+func marshalAddRequest(serviceName, hash, dockerId string) (
+    addRequest []byte, err error) {
+
+    reqInfo := common.AddRequest{serviceName, hash, dockerId}
+    return json.Marshal(reqInfo)
+}
+
 func GetHash(query string) (contentHash, dockerHash string, err error) {
-    ctx := context.Background()
-    nodeConfig := p2pnode.NewConfig()
-    node, err := p2pnode.NewNode(ctx, nodeConfig)
+    response, err := common.SendRequest(common.GetProtocolID, []byte(query))
     if err != nil {
         return "", "", err
     }
-    defer node.Host.Close()
-    defer node.DHT.Close()
 
-    contentHash, dockerHash, err = GetHashWithHostRouting(ctx, node.Host,
-        node.RoutingDiscovery, query)
-    return contentHash, dockerHash, err
+    return unmarshalGetResponse(response)
 }
 
 func GetHashWithHostRouting(
@@ -33,20 +69,92 @@ func GetHashWithHostRouting(
     contentHash, dockerHash string, err error) {
     
     response, err := common.SendRequestWithHostRouting(
-        ctx, host, routingDiscovery, common.LookupProtocolID, []byte(query))
+        ctx, host, routingDiscovery, common.GetProtocolID, []byte(query))
     if err != nil {
         return "", "", err
     }
 
-    var respInfo common.LookupResponse
-    err = json.Unmarshal(response, &respInfo)
+    return unmarshalGetResponse(response)
+}
+
+func unmarshalGetResponse(getResponse []byte) (
+    contentHash, dockerHash string, err error) {
+
+    var respInfo common.GetResponse
+    err = json.Unmarshal(getResponse, &respInfo)
     if err != nil {
         return "", "", err
     }
 
-    err = nil
     if !respInfo.LookupOk {
-        err = errors.New("hashlookup: Error finding hash for " + query)
+        return "", "", errors.New("hashlookup: Error finding hash")
     }
-    return respInfo.ContentHash, respInfo.DockerHash, err
+
+    return respInfo.ContentHash, respInfo.DockerHash, nil
+}
+
+func ListHashes() (
+    serviceNames, contentHashes, dockerHashes []string, err error) {
+
+    response, err := common.SendRequest(common.ListProtocolID, []byte{})
+    if err != nil {
+        return nil, nil, nil, err
+    }
+
+    return unmarshalListResponse(response)
+}
+
+func ListHashesWithHostRouting(
+    ctx context.Context, host host.Host,
+    routingDiscovery *discovery.RoutingDiscovery) (
+    serviceNames, contentHashes, dockerHashes []string, err error) {
+
+    response, err := common.SendRequestWithHostRouting(
+        ctx, host, routingDiscovery, common.ListProtocolID, []byte{})
+    if err != nil {
+        return nil, nil, nil, err
+    }
+
+    return unmarshalListResponse(response)
+}
+
+func unmarshalListResponse(listResponse []byte) (
+    serviceNames, contentHashes, dockerHashes []string, err error) {
+
+    var respInfo common.ListResponse
+    err = json.Unmarshal(listResponse, &respInfo)
+    if err != nil {
+        return nil, nil, nil, err
+    }
+
+    if !respInfo.LookupOk {
+        return nil, nil, nil, errors.New("hashlookup: Error finding hash")
+    }
+
+    return respInfo.ServiceNames, respInfo.ContentHashes,
+        respInfo.DockerHashes, nil
+}
+
+func DeleteHash(serviceName string) (deleteResponse string, err error) {
+    response, err := common.SendRequest(
+        common.DeleteProtocolID, []byte(serviceName))
+    if err != nil {
+        return "", err
+    }
+
+    return string(response), nil
+}
+
+func DeleteHashWithHostRouting(
+    ctx context.Context, host host.Host,
+    routingDiscovery *discovery.RoutingDiscovery, serviceName string) (
+    deleteResponse string, err error) {
+
+    response, err := common.SendRequestWithHostRouting(ctx, host,
+        routingDiscovery, common.DeleteProtocolID, []byte(serviceName))
+    if err != nil {
+        return "", err
+    }
+
+    return string(response), nil
 }

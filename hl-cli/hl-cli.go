@@ -2,13 +2,11 @@ package main
 
 import (
     "context"
-    "encoding/json"
     "flag"
     "fmt"
     "io/ioutil"
     "os"
     "path/filepath"
-    "strings"
 
     "github.com/ipfs/go-blockservice"
     "github.com/ipfs/go-ipfs/core"
@@ -19,11 +17,8 @@ import (
     "github.com/ipfs/go-mfs"
     "github.com/ipfs/go-unixfs"
 
-    "github.com/libp2p/go-libp2p-core/protocol"
-
     "github.com/Multi-Tier-Cloud/common/p2pnode"
     "github.com/Multi-Tier-Cloud/hash-lookup/hashlookup"
-    "github.com/Multi-Tier-Cloud/hash-lookup/hl-common"
 )
 
 type commandData struct {
@@ -143,10 +138,10 @@ func addCmd() {
         addUsage()
         return
     }
-    
+
     var hash string = ""
     var err error = nil
-    
+
     if *fileFlag != "" {
         hash, err = fileHash(*fileFlag)
         if err != nil {
@@ -174,18 +169,20 @@ func addCmd() {
     serviceName := addFlags.Arg(1)
     fmt.Printf("Adding %s:{ContentHash:%s, DockerHash:%s}\n",
         serviceName, hash, dockerId)
-    reqInfo := common.AddRequest{serviceName, hash, dockerId}
-    reqBytes, err := json.Marshal(reqInfo)
+
+    ctx, node, err := setupNode(*bootstrapFlag)
+    if err != nil {
+        panic(err)
+    }
+    defer node.Host.Close()
+    defer node.DHT.Close()
+
+    respStr, err := hashlookup.AddHashWithHostRouting(
+        ctx, node.Host, node.RoutingDiscovery, serviceName, hash, dockerId)
     if err != nil {
         panic(err)
     }
 
-    data, err := sendRequest(common.AddProtocolID, reqBytes, *bootstrapFlag)
-    if err != nil {
-        panic(err)
-    }
-
-    respStr := strings.TrimSpace(string(data))
     fmt.Println("Response:", respStr)
 }
 
@@ -203,7 +200,6 @@ func fileHash(path string) (hash string, err error) {
 
     return getHash(fileNode)
 }
-
 
 func stdinHash() (hash string, err error) {
     stdinData, err := ioutil.ReadAll(os.Stdin)
@@ -287,12 +283,7 @@ func getCmd() {
 
     serviceName := getFlags.Arg(0)
 
-    ctx := context.Background()
-    nodeConfig := p2pnode.NewConfig()
-    if *bootstrapFlag != "" {
-        nodeConfig.BootstrapPeers = []string{*bootstrapFlag}
-    }
-    node, err := p2pnode.NewNode(ctx, nodeConfig)
+    ctx, node, err := setupNode(*bootstrapFlag)
     if err != nil {
         panic(err)
     }
@@ -301,8 +292,6 @@ func getCmd() {
 
     contentHash, dockerHash, err := hashlookup.GetHashWithHostRouting(
         ctx, node.Host, node.RoutingDiscovery, serviceName)
-
-
     if err != nil {
         panic(err)
     }
@@ -316,22 +305,24 @@ func listCmd() {
         "For debugging: Connect to specified bootstrap node multiaddress")
     listFlags.Parse(os.Args[2:])
 
-    data, err := sendRequest(common.ListProtocolID, []byte{}, *bootstrapFlag)
+    ctx, node, err := setupNode(*bootstrapFlag)
     if err != nil {
         panic(err)
     }
+    defer node.Host.Close()
+    defer node.DHT.Close()
 
-    var respInfo common.ListResponse
-    err = json.Unmarshal(data, &respInfo)
+    serviceNames, contentHashes, dockerHashes, err :=
+        hashlookup.ListHashesWithHostRouting(
+        ctx, node.Host, node.RoutingDiscovery)
     if err != nil {
         panic(err)
     }
 
     fmt.Println("Response:")
-    for i := 0; i < len(respInfo.ServiceNames); i++ {
+    for i := 0; i < len(serviceNames); i++ {
         fmt.Printf("Service Name: %s, Content Hash: %s, Docker Hash: %s\n",
-            respInfo.ServiceNames[i], respInfo.ContentHashes[i],
-            respInfo.DockerHashes[i])
+            serviceNames[i], contentHashes[i], dockerHashes[i])
     }
 }
 
@@ -369,31 +360,33 @@ func deleteCmd() {
 
     serviceName := deleteFlags.Arg(0)
 
-    data, err := sendRequest(
-        common.DeleteProtocolID, []byte(serviceName), *bootstrapFlag)
+    ctx, node, err := setupNode(*bootstrapFlag)
     if err != nil {
         panic(err)
-    }
-
-    respStr := strings.TrimSpace(string(data))
-    fmt.Println("Response:", respStr)
-}
-
-func sendRequest(protocolID protocol.ID, request []byte, bootstrap string) (
-    response []byte, err error) {
-
-    ctx := context.Background()
-    nodeConfig := p2pnode.NewConfig()
-    if bootstrap != "" {
-        nodeConfig.BootstrapPeers = []string{bootstrap}
-    }
-    node, err := p2pnode.NewNode(ctx, nodeConfig)
-    if err != nil {
-        return nil, err
     }
     defer node.Host.Close()
     defer node.DHT.Close()
 
-    return common.SendRequestWithHostRouting(
-        ctx, node.Host, node.RoutingDiscovery, protocolID, request)
+    respStr, err := hashlookup.DeleteHashWithHostRouting(
+        ctx, node.Host, node.RoutingDiscovery, serviceName)
+    if err != nil {
+        panic(err)
+    }
+
+    fmt.Println("Response:", respStr)
+}
+
+func setupNode(bootstrap string) (
+    ctx context.Context, node p2pnode.Node, err error) {
+
+    ctx = context.Background()
+    nodeConfig := p2pnode.NewConfig()
+    if bootstrap != "" {
+        nodeConfig.BootstrapPeers = []string{bootstrap}
+    }
+    node, err = p2pnode.NewNode(ctx, nodeConfig)
+    if err != nil {
+        return ctx, node, err
+    }
+    return ctx, node, nil
 }
