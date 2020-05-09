@@ -1,12 +1,21 @@
 package main
 
 import (
+    "bufio"
     "context"
+    "encoding/base64"
+    "encoding/json"
+    "errors"
     "flag"
     "fmt"
     "io/ioutil"
     "os"
     "path/filepath"
+    "strings"
+    "syscall"
+
+    "github.com/docker/docker/api/types"
+    "github.com/docker/docker/client"
 
     "github.com/ipfs/go-blockservice"
     "github.com/ipfs/go-ipfs/core"
@@ -16,6 +25,8 @@ import (
     dagtest "github.com/ipfs/go-merkledag/test"
     "github.com/ipfs/go-mfs"
     "github.com/ipfs/go-unixfs"
+
+    "golang.org/x/crypto/ssh/terminal"
 
     "github.com/Multi-Tier-Cloud/common/p2pnode"
     "github.com/Multi-Tier-Cloud/hash-lookup/hashlookup"
@@ -104,11 +115,11 @@ func addCmd() {
 
     addUsage := func() {
         exeName := getExeName()
-        fmt.Fprintln(os.Stderr, "Usage:", exeName, "add [<options>] <docker-id> <name>")
+        fmt.Fprintln(os.Stderr, "Usage:", exeName, "add [<options>] <docker-image> <name>")
         fmt.Fprintln(os.Stderr,
 `
-<docker-id>
-        Dockerhub ID of microservice (<username>/<repository>@sha256:<hash>)
+<docker-image>
+        Docker image of microservice to push to DockerHub (<username>/<repository>:<tag>)
 
 <name>
         Name of microservice to associate hashed content with
@@ -165,8 +176,19 @@ func addCmd() {
         return
     }
 
-    dockerId := addFlags.Arg(0)
+    dockerImage := addFlags.Arg(0)
     serviceName := addFlags.Arg(1)
+
+    digest, err := pushImage(dockerImage)
+    if err != nil {
+        panic(err)
+    }
+
+    fmt.Println("Pushed to DockerHub successfully")
+
+    parts := strings.Split(dockerImage, ":")
+    dockerId := parts[0] + "@" + digest
+
     fmt.Printf("Adding %s:{ContentHash:%s, DockerHash:%s}\n",
         serviceName, hash, dockerId)
 
@@ -184,6 +206,76 @@ func addCmd() {
     }
 
     fmt.Println("Response:", respStr)
+}
+
+func getAuth() (string, error) {
+    fmt.Println("DockerHub login")
+    scanner := bufio.NewScanner(os.Stdin)
+    fmt.Print("Username: ")
+    scanner.Scan()
+    username := scanner.Text()
+    fmt.Print("Password: ")
+    passwordBytes, err := terminal.ReadPassword(syscall.Stdin)
+    if err != nil {
+        return "", err
+    }
+    fmt.Println()
+
+    authConfig := types.AuthConfig{
+        Username: username,
+        Password: string(passwordBytes),
+    }
+    encodedJSON, err := json.Marshal(authConfig)
+    if err != nil {
+        return "", err
+    }
+    authStr := base64.URLEncoding.EncodeToString(encodedJSON)
+    return authStr, nil
+}
+
+func pushImage(image string) (string, error) {
+    authStr, err := getAuth()
+    if err != nil {
+        return "", err
+    }
+
+    ctx := context.Background()
+    cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+    if err != nil {
+        return "", err
+    }
+
+    resp, err := cli.ImagePush(ctx, image, types.ImagePushOptions{RegistryAuth:authStr})
+    if err != nil {
+        return "", err
+    }
+    defer resp.Close()
+
+    scanner := bufio.NewScanner(resp)
+    for scanner.Scan() {
+        line := scanner.Text()
+        // fmt.Println(line)
+
+        var respObject struct {
+            Aux struct {
+                Digest string
+            }
+            Error string
+        }
+
+        err = json.Unmarshal([]byte(line), &respObject)
+        if err != nil {
+            return "", err
+        }
+
+        if respObject.Aux.Digest != "" {
+            return respObject.Aux.Digest, nil
+        } else if respObject.Error != "" {
+            return "", errors.New(respObject.Error)
+        }
+    }
+
+    return "", errors.New("hl-cli: Error did not receive digest")
 }
 
 func fileHash(path string) (hash string, err error) {
