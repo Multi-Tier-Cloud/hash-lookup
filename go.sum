@@ -16,6 +16,10 @@ github.com/Multi-Tier-Cloud/common v0.0.0-20200309021533-0128c0bbff6d h1:5GGbz1s
 github.com/Multi-Tier-Cloud/common v0.0.0-20200309021533-0128c0bbff6d/go.mod h1:mYfgQ8NGzZk6T8yQJWkRxgoH/BTgytCYhmljAcIpc/g=
 github.com/Multi-Tier-Cloud/common v0.0.0-20200403032527-d7311ad845b4 h1:V+xAGhoMaqOwfXEEFU6Kr7JVldjrEQRvvMmJ0krQ3qY=
 github.com/Multi-Tier-Cloud/common v0.0.0-20200403032527-d7311ad845b4/go.mod h1:mYfgQ8NGzZk6T8yQJWkRxgoH/BTgytCYhmljAcIpc/g=
+github.com/Multi-Tier-Cloud/docker-driver v0.0.0-20200323084307-72982cb10a89/go.mod h1:dwW1GHo7N7DFF4Ra6m1YH2P41LrC573oX16rnjIP2jM=
+github.com/Multi-Tier-Cloud/hash-lookup v0.0.0-20200322054456-6ebd2eaf054a/go.mod h1:6lyb4mvH/WgjiEKzDS/CkBYEUE53T3k9zBdhco++R2c=
+github.com/Multi-Tier-Cloud/service-manager v0.0.0-20200511223312-5567dab8e0bd h1:o7TIRdAoJhkgz53SIZ3E/SHYxSQ4zfBqp6z/bQOhPGk=
+github.com/Multi-Tier-Cloud/service-manager v0.0.0-20200511223312-5567dab8e0bd/go.mod h1:xUwijoDq4ZsQm8qvFX9gHQIQyW5sEbRGyhHUR9cMSDI=
 github.com/Stebalien/go-bitfield v0.0.0-20180330043415-076a62f9ce6e/go.mod h1:3oM7gXIttpYDAJXpVNnSCiUMYBLIZ6cb1t+Ip982MRo=
 github.com/Stebalien/go-bitfield v0.0.1 h1:X3kbSSPUaJK60wV2hjOPZwmpljr6VGCqdq4cBLhbQBo=
 github.com/Stebalien/go-bitfield v0.0.1/go.mod h1:GNjFpasyUVkHMsfEOk8EFLJ9syQ6SI+XWrX9Wf2XH0s=
@@ -924,6 +928,8 @@ golang.org/x/net v0.0.0-20190620200207-3b0461eec859/go.mod h1:z5CRVTTTmAJ677TzLL
 golang.org/x/net v0.0.0-20190813141303-74dc4d7220e7/go.mod h1:z5CRVTTTmAJ677TzLLGU+0bjPO0LkuOLi4/5GtJWs/s=
 golang.org/x/net v0.0.0-20191002035440-2ec189313ef0 h1:2mqDk8w/o6UmeUCu5Qiq2y7iMf6anbx+YA8d1JFoFrs=
 golang.org/x/net v0.0.0-20191002035440-2ec189313ef0/go.mod h1:z5CRVTTTmAJ677TzLLGU+0bjPO0LkuOLi4/5GtJWs/s=
+golang.org/x/net v0.0.0-20200320220750-118fecf932d8 h1:1+zQlQqEEhUeStBTi653GZAnAuivZq/2hz+Iz+OP7rg=
+golang.org/x/net v0.0.0-20200320220750-118fecf932d8/go.mod h1:z5CRVTTTmAJ677TzLLGU+0bjPO0LkuOLi4/5GtJWs/s=
 golang.org/x/oauth2 v0.0.0-20180821212333-d2e6202438be/go.mod h1:N/0e6XlmueqKjAGxoOufVs8QHGRruUQn6yWY3a++T0U=
 golang.org/x/sync v0.0.0-20180314180146-1d60e4601c6f/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
 golang.org/x/sync v0.0.0-20181108010431-42b317875d0f/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=

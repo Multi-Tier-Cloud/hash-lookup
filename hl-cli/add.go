@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/base64"
     "encoding/json"
@@ -9,7 +10,9 @@ import (
     "flag"
 	"fmt"
 	"io/ioutil"
-	"os"
+    "os"
+    "os/exec"
+    "path/filepath"
 	"strings"
 	"syscall"
 	
@@ -28,6 +31,7 @@ import (
     "golang.org/x/crypto/ssh/terminal"
 
 	"github.com/Multi-Tier-Cloud/hash-lookup/hashlookup"
+	"github.com/Multi-Tier-Cloud/service-manager/conf"
 )
 
 func addCmd() {
@@ -134,6 +138,112 @@ func addCmd() {
     }
 
     fmt.Println("Response:", respStr)
+}
+
+type ImageConf struct {
+	PerfConf conf.Config
+
+	DockerConf struct {
+		Copy [][2]string
+		Run []string
+		Cmd string
+	}
+}
+
+const dockerfileCore string =
+`FROM ubuntu:16.04
+WORKDIR /app
+COPY proxy .
+COPY perf.conf .
+ENV PROXY_PORT=4201
+ENV PROXY_IP=127.0.0.1
+ENV SERVICE_PORT=8080
+`
+
+func buildServiceImage(configFile, serviceName string) error {
+	configBytes, err := ioutil.ReadFile(configFile)
+	if err != nil {
+		return err
+	}
+
+	config, err := unmarshalImageConf(configBytes)
+	if err != nil {
+		return err
+    }
+    
+    _ = createDockerfile(config, serviceName)
+
+    tmpDir, proxyPath, err := buildProxy("")
+    if err != nil {
+        return err
+    }
+    defer os.RemoveAll(tmpDir)
+
+    _, err = ioutil.ReadFile(proxyPath)
+    if err != nil {
+        return err
+    }
+
+    return nil
+}
+
+func unmarshalImageConf(configBytes []byte) (config ImageConf, err error) {
+	err = json.Unmarshal(configBytes, &config)
+	if err != nil {
+		return config, err
+    }
+    return config, nil
+}
+
+func createDockerfile(config ImageConf, serviceName string) []byte {
+    var dockerfile bytes.Buffer
+    dockerfile.WriteString(dockerfileCore)
+    for _, copyArgs := range config.DockerConf.Copy {
+        dockerfile.WriteString(fmt.Sprintln("COPY", copyArgs[0], copyArgs[1]))
+    }
+    for _, runCmd := range config.DockerConf.Run {
+        dockerfile.WriteString(fmt.Sprintln("RUN", runCmd))
+    }
+    dockerfile.WriteString(fmt.Sprintf(
+        "CMD ./proxy $PROXY_PORT %s $PROXY_IP:$SERVICE_PORT > proxy.log 2>&1 & %s\n",
+        serviceName, config.DockerConf.Cmd))
+    return dockerfile.Bytes()
+}
+
+func buildProxy(version string) (tmpDir, proxyPath string, err error) {
+    tmpDir, err = ioutil.TempDir("", "proxy-")
+    if err != nil {
+        return "", "", err
+    }
+
+    cloneCmd := exec.Command("git", "clone", "https://github.com/Multi-Tier-Cloud/service-manager.git")
+    cloneCmd.Dir = tmpDir
+    cloneCmd.Stdout = os.Stdout
+    cloneCmd.Stderr = os.Stderr
+    err = cloneCmd.Run()
+    if err != nil {
+        os.RemoveAll(tmpDir)
+        return "", "", err
+    }
+
+    buildCmd := exec.Command("go", "build", "-o", "proxy")
+    buildCmd.Dir = filepath.Join(tmpDir, "service-manager/proxy")
+    buildCmd.Stdout = os.Stdout
+    buildCmd.Stderr = os.Stderr
+    err = buildCmd.Run()
+    if err != nil {
+        os.RemoveAll(tmpDir)
+        return "", "", err
+    }
+
+    proxyPath = filepath.Join(buildCmd.Dir, "proxy")
+    _, err = os.Lstat(proxyPath)
+    if err != nil {
+        os.RemoveAll(tmpDir)
+        return "", "", err
+    }
+
+    return tmpDir, proxyPath, nil
 }
 
 func getAuth() (string, error) {

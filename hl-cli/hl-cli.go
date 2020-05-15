@@ -67,7 +67,8 @@ func main() {
 
 func usage() {
     exeName := getExeName()
-    fmt.Fprintln(os.Stderr, "Usage:", exeName, "<command>\n")
+    fmt.Fprintln(os.Stderr, "Usage:", exeName, "<command>")
+    fmt.Fprintln(os.Stderr)
     fmt.Fprintln(os.Stderr, "<command>")
     for _, cmd := range commands {
         fmt.Fprintln(os.Stderr, "  " + cmd.Name)
