@@ -1,11 +1,11 @@
 package main
 
 import (
-	"flag"
-	"fmt"
-	"os"
+    "flag"
+    "fmt"
+    "os"
 
-	"github.com/Multi-Tier-Cloud/hash-lookup/hashlookup"
+    "github.com/Multi-Tier-Cloud/hash-lookup/hashlookup"
 )
 
 func listCmd() {

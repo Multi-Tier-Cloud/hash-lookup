@@ -1,25 +1,26 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
-	"context"
-	"encoding/base64"
+    "archive/tar"
+    "bufio"
+    "bytes"
+    "context"
+    "encoding/base64"
     "encoding/json"
     "errors"
     "flag"
-	"fmt"
-	"io/ioutil"
+    "fmt"
+    "io/ioutil"
     "os"
     "os/exec"
     "path/filepath"
-	"strings"
-	"syscall"
-	
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/client"
-	
-	"github.com/ipfs/go-blockservice"
+    "strings"
+    "syscall"
+    
+    "github.com/docker/docker/api/types"
+    "github.com/docker/docker/client"
+    
+    "github.com/ipfs/go-blockservice"
     "github.com/ipfs/go-ipfs/core"
     "github.com/ipfs/go-ipfs/core/coreunix"
     "github.com/ipfs/go-ipfs-files"
@@ -30,8 +31,8 @@ import (
 
     "golang.org/x/crypto/ssh/terminal"
 
-	"github.com/Multi-Tier-Cloud/hash-lookup/hashlookup"
-	"github.com/Multi-Tier-Cloud/service-manager/conf"
+    "github.com/Multi-Tier-Cloud/hash-lookup/hashlookup"
+    "github.com/Multi-Tier-Cloud/service-manager/conf"
 )
 
 func addCmd() {
@@ -141,13 +142,13 @@ func addCmd() {
 }
 
 type ImageConf struct {
-	PerfConf conf.Config
+    PerfConf conf.Config
 
-	DockerConf struct {
-		Copy [][2]string
-		Run []string
-		Cmd string
-	}
+    DockerConf struct {
+        Copy [][2]string
+        Run []string
+        Cmd string
+    }
 }
 
 const dockerfileCore string =
@@ -160,26 +161,17 @@ ENV PROXY_IP=127.0.0.1
 ENV SERVICE_PORT=8080
 `
 
-func buildServiceImage(configFile, serviceName string) error {
-	configBytes, err := ioutil.ReadFile(configFile)
-	if err != nil {
-		return err
-	}
-
-	config, err := unmarshalImageConf(configBytes)
-	if err != nil {
-		return err
-    }
-    
-    _ = createDockerfile(config, serviceName)
-
-    tmpDir, proxyPath, err := buildProxy("")
+func buildServiceImage(configFile, srcDir, serviceName string) error {
+    configBytes, err := ioutil.ReadFile(configFile)
     if err != nil {
         return err
     }
-    defer os.RemoveAll(tmpDir)
+    config, err := unmarshalImageConf(configBytes)
+    if err != nil {
+        return err
+    }
 
-    _, err = ioutil.ReadFile(proxyPath)
+    _, err = createDockerBuildContext(config, srcDir, serviceName)
     if err != nil {
         return err
     }
@@ -188,11 +180,55 @@ func buildServiceImage(configFile, serviceName string) error {
 }
 
 func unmarshalImageConf(configBytes []byte) (config ImageConf, err error) {
-	err = json.Unmarshal(configBytes, &config)
-	if err != nil {
-		return config, err
+    err = json.Unmarshal(configBytes, &config)
+    if err != nil {
+        return config, err
     }
     return config, nil
+}
+
+func createDockerBuildContext(config ImageConf, srcDir, serviceName string) (
+    imageBuildContext *bytes.Buffer, err error) {
+
+    imageBuildContext = new(bytes.Buffer)
+    tw := tar.NewWriter(imageBuildContext)
+    defer tw.Close()
+
+    dockerfileBytes := createDockerfile(config, serviceName)
+    dockerfileHdr := &tar.Header{
+        Name: "Dockerfile",
+        Mode: 0646,
+        Size: int64(len(dockerfileBytes)),
+    }
+    err = tw.WriteHeader(dockerfileHdr)
+    if err != nil {
+        return nil, err
+    }
+    _, err = tw.Write(dockerfileBytes)
+    if err != nil {
+        return nil, err
+    }
+
+    tmpDir, proxyPath, err := buildProxy("")
+    if err != nil {
+        return nil, err
+    }
+    defer os.RemoveAll(tmpDir)
+
+    err = tarAddFile(tw, proxyPath, "proxy")
+    if err != nil {
+        return nil, err
+    }
+
+    for _, copyArgs := range config.DockerConf.Copy {
+        srcPath := filepath.Join(srcDir, copyArgs[0])
+        err = tarAddFile(tw, srcPath, copyArgs[0])
+        if err != nil {
+            return nil, err
+        }
+    }
+
+    return imageBuildContext, nil
 }
 
 func createDockerfile(config ImageConf, serviceName string) []byte {
@@ -244,6 +280,33 @@ func buildProxy(version string) (tmpDir, proxyPath string, err error) {
     }
 
     return tmpDir, proxyPath, nil
+}
+
+func tarAddFile(tw *tar.Writer, srcPath, dstPath string) error {
+    fileInfo, err := os.Lstat(srcPath)
+    if err != nil {
+        return err
+    }
+    hdr, err := tar.FileInfoHeader(fileInfo, fileInfo.Name())
+    if err != nil {
+        return err
+    }
+    hdr.Name = dstPath
+    err = tw.WriteHeader(hdr)
+    if err != nil {
+        return err
+    }
+
+    fileBytes, err := ioutil.ReadFile(srcPath)
+    if err != nil {
+        return err
+    }
+    _, err = tw.Write(fileBytes)
+    if err != nil {
+        return err
+    }
+
+    return nil
 }
 
 func getAuth() (string, error) {
