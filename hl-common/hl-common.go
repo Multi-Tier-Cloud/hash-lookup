@@ -4,6 +4,7 @@ import (
     "context"
     "errors"
     "fmt"
+    "log"
     "math"
     "time"
 
@@ -43,6 +44,11 @@ type ListResponse struct {
     LookupOk bool
 }
 
+func init() {
+    // Set up logging defaults
+    log.SetFlags(log.Ldate | log.Lmicroseconds | log.Lshortfile)
+}
+
 func SendRequest(protocolID protocol.ID, request []byte) (
     response []byte, err error) {
 
@@ -70,18 +76,19 @@ func SendRequestWithHostRouting(ctx context.Context,
         if connAttempts > 0 {
             sleepDuration := int(math.Pow(2, float64(connAttempts)))
             for i := 0; i < sleepDuration; i++ {
-                fmt.Printf("\rUnable to connect to any peers, " +
+                log.Printf("\rUnable to connect to any peers, " +
                     "retrying in %d seconds...     ",
                     sleepDuration - i)
                 time.Sleep(time.Second)
             }
-            fmt.Println()
+            log.Println()
         }
 
         peerChan, err := routingDiscovery.FindPeers(
             ctx, HashLookupRendezvousString)
         if err != nil {
-            return nil, err
+            return nil, fmt.Errorf("ERROR: Unable to find peer with service ID %s\n%w",
+                                    HashLookupRendezvousString, err)
         }
 
         for peer := range peerChan {
@@ -89,10 +96,10 @@ func SendRequestWithHostRouting(ctx context.Context,
                 continue
             }
 
-            fmt.Println("Connecting to:", peer)
+            log.Println("Connecting to:", peer)
             stream, err := host.NewStream(ctx, peer.ID, protocolID)
             if err != nil {
-                fmt.Println("Connection failed:", err)
+                log.Println("Connection failed:", err)
                 continue
             }
 

@@ -3,6 +3,7 @@ package main
 import (
     "context"
     "encoding/json"
+    "log"
     "fmt"
     "strings"
 
@@ -62,17 +63,17 @@ func handleMemberAdd(etcdCli *clientv3.Client) func(network.Stream) {
     return func(stream network.Stream) {
         data, err := p2putil.ReadMsg(stream)
         if err != nil {
-            fmt.Println(err)
+            log.Println(err)
             return
         }
 
         reqStr := strings.TrimSpace(string(data))
-        fmt.Println("Member add request:", reqStr)
+        log.Println("Member add request:", reqStr)
 
         var reqInfo memberAddRequest
         err = json.Unmarshal([]byte(reqStr), &reqInfo)
         if err != nil {
-            fmt.Println(err)
+            log.Println(err)
             stream.Reset()
             return
         }
@@ -80,15 +81,15 @@ func handleMemberAdd(etcdCli *clientv3.Client) func(network.Stream) {
         initialCluster, err := addEtcdMember(
             etcdCli, reqInfo.MemberName, reqInfo.MemberPeerUrl)
         if err != nil {
-            fmt.Println(err)
+            log.Println(err)
             stream.Reset()
             return
         }
 
-        fmt.Println("Member add response: ", initialCluster)
+        log.Println("Member add response: ", initialCluster)
         err = p2putil.WriteMsg(stream, []byte(initialCluster))
         if err != nil {
-            fmt.Println(err)
+            log.Println(err)
             return
         }
     }
