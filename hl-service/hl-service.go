@@ -19,10 +19,13 @@ import (
 
     "github.com/Multi-Tier-Cloud/common/p2pnode"
     "github.com/Multi-Tier-Cloud/common/p2putil"
+    "github.com/Multi-Tier-Cloud/common/util"
     "github.com/Multi-Tier-Cloud/hash-lookup/hl-common"
 
     "github.com/prometheus/client_golang/prometheus/promhttp"
 )
+
+const defaultKeyFile = "~/.privKeyHashLookup"
 
 func init() {
     // Set up logging defaults
@@ -35,6 +38,11 @@ type etcdData struct {
 }
 
 func main() {
+    var err error
+    var keyFlags util.KeyFlags
+    if keyFlags, err = util.AddKeyFlags(defaultKeyFile); err != nil {
+        log.Fatalln(err)
+    }
     newEtcdClusterFlag := flag.Bool("new-etcd-cluster", false,
         "Start running new etcd cluster")
     etcdIpFlag := flag.String("etcd-ip", "127.0.0.1",
@@ -51,6 +59,11 @@ func main() {
     promEndpoint := flag.String("prom-listen-addr", ":9102",
         "Listening address/endpoint for Prometheus to scrape")
     flag.Parse()
+
+    priv, err := util.CreateOrLoadKey(keyFlags)
+    if err != nil {
+        log.Fatalln(err)
+    }
 
     // Start Prometheus endpoint for stats collection
     http.Handle("/metrics", promhttp.Handler())
@@ -69,8 +82,6 @@ func main() {
 
     initialCluster := etcdName + "=" + etcdPeerUrl
     clusterState := "new"
-
-    var err error
 
     if !(*newEtcdClusterFlag) {
         initialCluster, err = sendMemberAddRequest(
@@ -111,6 +122,9 @@ func main() {
     }
     defer etcdCli.Close()
 
+    // TODO: Remove this test entry at some point...
+    //       Currently useful to serve as a negative test case when pulling images
+    // BEGIN test entry
     testData := etcdData{"general", "kenobi"}
     testDataBytes, err := json.Marshal(testData)
     if err != nil {
@@ -122,8 +136,10 @@ func main() {
         panic(err)
     }
     log.Println("etcd Response:", putResp)
+    // END test entry
 
     nodeConfig := p2pnode.NewConfig()
+    nodeConfig.PrivKey = priv
     if *localFlag {
         nodeConfig.BootstrapPeers = []string{}
     } else if *bootstrapFlag != "" {
