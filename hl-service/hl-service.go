@@ -23,6 +23,8 @@ import (
     "github.com/Multi-Tier-Cloud/hash-lookup/hl-common"
 
     "github.com/prometheus/client_golang/prometheus/promhttp"
+
+    "github.com/multiformats/go-multiaddr"
 )
 
 const defaultKeyFile = "~/.privKeyHashLookup"
@@ -40,7 +42,11 @@ type etcdData struct {
 func main() {
     var err error
     var keyFlags util.KeyFlags
+    var bootstraps *[]multiaddr.Multiaddr
     if keyFlags, err = util.AddKeyFlags(defaultKeyFile); err != nil {
+        log.Fatalln(err)
+    }
+    if bootstraps, err = util.AddBootstrapFlags(); err != nil {
         log.Fatalln(err)
     }
     newEtcdClusterFlag := flag.Bool("new-etcd-cluster", false,
@@ -54,11 +60,13 @@ func main() {
     localFlag := flag.Bool("local", false,
         "For debugging: Run locally and do not connect to bootstrap peers\n" +
         "(this option overrides the '--bootstrap' flag)")
-    bootstrapFlag := flag.String("bootstrap", "",
-        "For debugging: Connect to specified bootstrap node multiaddress")
     promEndpoint := flag.String("prom-listen-addr", ":9102",
         "Listening address/endpoint for Prometheus to scrape")
     flag.Parse()
+
+    if !(*localFlag) && len(*bootstraps) == 0 {
+        log.Fatalln("Must specify the multiaddr of at least one bootstrap node")
+    }
 
     priv, err := util.CreateOrLoadKey(keyFlags)
     if err != nil {
@@ -85,7 +93,7 @@ func main() {
 
     if !(*newEtcdClusterFlag) {
         initialCluster, err = sendMemberAddRequest(
-            etcdName, etcdPeerUrl, *localFlag, *bootstrapFlag)
+            etcdName, etcdPeerUrl, *localFlag, *bootstraps)
         if err != nil {
             panic(err)
         }
@@ -141,9 +149,9 @@ func main() {
     nodeConfig := p2pnode.NewConfig()
     nodeConfig.PrivKey = priv
     if *localFlag {
-        nodeConfig.BootstrapPeers = []string{}
-    } else if *bootstrapFlag != "" {
-        nodeConfig.BootstrapPeers = []string{*bootstrapFlag}
+        nodeConfig.BootstrapPeers = []multiaddr.Multiaddr{}
+    } else if len(*bootstraps) > 0 {
+        nodeConfig.BootstrapPeers = *bootstraps
     }
     nodeConfig.StreamHandlers = append(nodeConfig.StreamHandlers,
         handleAdd(etcdCli), handleGet(etcdCli), handleList(etcdCli),

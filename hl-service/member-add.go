@@ -15,6 +15,8 @@ import (
     "github.com/Multi-Tier-Cloud/common/p2pnode"
     "github.com/Multi-Tier-Cloud/common/p2putil"
     "github.com/Multi-Tier-Cloud/hash-lookup/hl-common"
+
+    "github.com/multiformats/go-multiaddr"
 )
 
 var memberAddProtocolID protocol.ID = "/memberadd/1.0"
@@ -25,15 +27,15 @@ type memberAddRequest struct {
 }
 
 func sendMemberAddRequest(
-    newMemName, newMemPeerUrl string, local bool, bootstrap string) (
-    initialCluster string, err error) {
+    newMemName, newMemPeerUrl string, local bool,
+    bootstraps []multiaddr.Multiaddr) (initialCluster string, err error) {
 
     ctx := context.Background()
     nodeConfig := p2pnode.NewConfig()
     if local {
-        nodeConfig.BootstrapPeers = []string{}
-    } else if bootstrap != "" {
-        nodeConfig.BootstrapPeers = []string{bootstrap}
+        nodeConfig.BootstrapPeers = []multiaddr.Multiaddr{}
+    } else if len(bootstraps) > 0 {
+        nodeConfig.BootstrapPeers = bootstraps
     }
     node, err := p2pnode.NewNode(ctx, nodeConfig)
     if err != nil {
