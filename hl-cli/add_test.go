@@ -57,3 +57,14 @@ func TestBuildServiceImage(t *testing.T) {
         t.Errorf("%v", err)
     }
 }
+
+func TestSaveImage(t *testing.T) {
+    imageBytes, err := saveImage("test-image:1.0")
+    if err != nil {
+        t.Errorf("%v", err)
+    }
+    err = ioutil.WriteFile("test-image.tar.gz", imageBytes, 0666)
+    if err != nil {
+        t.Errorf("%v", err)
+    }
+}

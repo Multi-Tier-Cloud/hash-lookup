@@ -369,6 +369,27 @@ func buildImage(buildContext io.Reader, imageName string) error {
     return nil
 }
 
+func saveImage(imageName string) ([]byte, error) {
+    ctx := context.Background()
+    cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+    if err != nil {
+        return nil, err
+    }
+
+    resp, err := cli.ImageSave(ctx, []string{imageName})
+    if err != nil {
+        return nil, err
+    }
+    defer resp.Close()
+
+    respBytes, err := ioutil.ReadAll(resp)
+    if err != nil {
+        return nil, err
+    }
+
+    return respBytes, nil
+}
+
 func getAuth() (string, error) {
     fmt.Println("DockerHub login")
     scanner := bufio.NewScanner(os.Stdin)
