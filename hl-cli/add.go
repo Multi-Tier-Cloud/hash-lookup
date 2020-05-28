@@ -10,6 +10,7 @@ import (
     "errors"
     "flag"
     "fmt"
+    "io"
     "io/ioutil"
     "os"
     "os/exec"
@@ -171,7 +172,12 @@ func buildServiceImage(configFile, srcDir, serviceName string) error {
         return err
     }
 
-    _, err = createDockerBuildContext(config, srcDir, serviceName)
+    buildContext, err := createDockerBuildContext(config, srcDir, serviceName)
+    if err != nil {
+        return err
+    }
+
+    err = buildImage(buildContext, serviceName)
     if err != nil {
         return err
     }
@@ -205,6 +211,24 @@ func createDockerBuildContext(config ImageConf, srcDir, serviceName string) (
         return nil, err
     }
     _, err = tw.Write(dockerfileBytes)
+    if err != nil {
+        return nil, err
+    }
+
+    perfconfBytes, err := json.Marshal(config.PerfConf)
+    if err != nil {
+        return nil, err
+    }
+    perfconfHdr := &tar.Header{
+        Name: "perf.conf",
+        Mode: 0646,
+        Size: int64(len(perfconfBytes)),
+    }
+    err = tw.WriteHeader(perfconfHdr)
+    if err != nil {
+        return nil, err
+    }
+    _, err = tw.Write(perfconfBytes)
     if err != nil {
         return nil, err
     }
@@ -304,6 +328,42 @@ func tarAddFile(tw *tar.Writer, srcPath, dstPath string) error {
     _, err = tw.Write(fileBytes)
     if err != nil {
         return err
+    }
+
+    return nil
+}
+
+func buildImage(buildContext io.Reader, imageName string) error {
+    ctx := context.Background()
+    cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+    if err != nil {
+        return err
+    }
+
+    resp, err := cli.ImageBuild(ctx, buildContext, types.ImageBuildOptions{Tags: []string{imageName}})
+    if err != nil {
+        return err
+    }
+    defer resp.Body.Close()
+
+    scanner := bufio.NewScanner(resp.Body)
+    for scanner.Scan() {
+        line := scanner.Text()
+        // fmt.Println(line)
+
+        var respBodyObject struct {
+            // Normal response lines have "stream" field instead of "error"
+            Error string
+        }
+
+        err = json.Unmarshal([]byte(line), &respBodyObject)
+        if err != nil {
+            return err
+        }
+
+        if respBodyObject.Error != "" {
+            return errors.New(respBodyObject.Error)
+        }
     }
 
     return nil

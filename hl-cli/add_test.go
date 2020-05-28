@@ -1,3 +1,7 @@
+// May need to run with sudo to perform Docker tests
+// sudo env "PATH=$PATH" go test
+// In case "go" is not in sudo path
+
 package main
 
 import (
@@ -42,6 +46,13 @@ func TestCreateDockerBuildContext(t *testing.T) {
         t.Errorf("%v", err)
     }
     err = ioutil.WriteFile("test.tar", buildContext.Bytes(), 0666)
+    if err != nil {
+        t.Errorf("%v", err)
+    }
+}
+
+func TestBuildServiceImage(t *testing.T) {
+    err := buildServiceImage("image.conf", "test", "test-image:1.0")
     if err != nil {
         t.Errorf("%v", err)
     }
