@@ -4,6 +4,7 @@ import (
     "context"
     "flag"
     "fmt"
+    "log"
     "io/ioutil"
     "os"
     "path/filepath"
@@ -60,8 +61,7 @@ var (
 func main() {
     var err error
     if bootstraps, err = util.AddBootstrapFlags(); err != nil {
-        fmt.Println(err)
-        os.Exit(1)
+        log.Fatalln(err)
     }
     flag.Usage = usage
     flag.Parse()
@@ -171,13 +171,13 @@ func addCmd() {
     if *fileFlag != "" {
         hash, err = fileHash(*fileFlag)
         if err != nil {
-            panic(err)
+            log.Fatalln(err)
         }
         fmt.Println("Hashed file:", hash)
     } else if *stdinFlag {
         hash, err = stdinHash()
         if err != nil {
-            panic(err)
+            log.Fatalln(err)
         }
         fmt.Println("Hashed stdin:", hash)
     } else {
@@ -198,7 +198,7 @@ func addCmd() {
 
     ctx, node, err := setupNode(*bootstraps)
     if err != nil {
-        panic(err)
+        log.Fatalln(err)
     }
     defer node.Host.Close()
     defer node.DHT.Close()
@@ -206,7 +206,7 @@ func addCmd() {
     respStr, err := hashlookup.AddHashWithHostRouting(
         ctx, node.Host, node.RoutingDiscovery, serviceName, hash, dockerId)
     if err != nil {
-        panic(err)
+        log.Fatalln(err)
     }
 
     fmt.Println("Response:", respStr)
@@ -309,7 +309,7 @@ func getCmd() {
 
     ctx, node, err := setupNode(*bootstraps)
     if err != nil {
-        panic(err)
+        log.Fatalln(err)
     }
     defer node.Host.Close()
     defer node.DHT.Close()
@@ -317,7 +317,7 @@ func getCmd() {
     contentHash, dockerHash, err := hashlookup.GetHashWithHostRouting(
         ctx, node.Host, node.RoutingDiscovery, serviceName)
     if err != nil {
-        panic(err)
+        log.Fatalln(err)
     }
     fmt.Println(
         "Response: Content Hash:", contentHash, ", Docker Hash:", dockerHash)
@@ -329,7 +329,7 @@ func listCmd() {
 
     ctx, node, err := setupNode(*bootstraps)
     if err != nil {
-        panic(err)
+        log.Fatalln(err)
     }
     defer node.Host.Close()
     defer node.DHT.Close()
@@ -338,7 +338,7 @@ func listCmd() {
         hashlookup.ListHashesWithHostRouting(
         ctx, node.Host, node.RoutingDiscovery)
     if err != nil {
-        panic(err)
+        log.Fatalln(err)
     }
 
     fmt.Println("Response:")
@@ -382,7 +382,7 @@ func deleteCmd() {
 
     ctx, node, err := setupNode(*bootstraps)
     if err != nil {
-        panic(err)
+        log.Fatalln(err)
     }
     defer node.Host.Close()
     defer node.DHT.Close()
@@ -390,7 +390,7 @@ func deleteCmd() {
     respStr, err := hashlookup.DeleteHashWithHostRouting(
         ctx, node.Host, node.RoutingDiscovery, serviceName)
     if err != nil {
-        panic(err)
+        log.Fatalln(err)
     }
 
     fmt.Println("Response:", respStr)
