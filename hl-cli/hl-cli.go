@@ -4,6 +4,7 @@ import (
     "context"
     "flag"
     "fmt"
+    "log"
     "io/ioutil"
     "os"
     "path/filepath"
@@ -17,7 +18,10 @@ import (
     "github.com/ipfs/go-mfs"
     "github.com/ipfs/go-unixfs"
 
+    "github.com/multiformats/go-multiaddr"
+
     "github.com/Multi-Tier-Cloud/common/p2pnode"
+    "github.com/Multi-Tier-Cloud/common/util"
     "github.com/Multi-Tier-Cloud/hash-lookup/hashlookup"
 )
 
@@ -27,37 +31,56 @@ type commandData struct {
     Run func()
 }
 
-var commands = []commandData{
-    commandData{
-        "add",
-        "Hash a microservice and add it to the hash-lookup service",
-        addCmd,
-    },
-    commandData{
-        "get",
-        "Get the content hash and Docker ID of a microservice",
-        getCmd,
-    },
-    commandData{
-        "list",
-        "List all microservices and data stored by the hash-lookup service",
-        listCmd,
-    },
-    commandData{
-        "delete",
-        "Delete a microservice entry",
-        deleteCmd,
-    },
-}
-
-func main() {
-    if len(os.Args) < 2 {
-        fmt.Fprintln(os.Stderr, "Error: missing required arguments")
-        usage()
-        return
+var (
+    commands = []commandData{
+        commandData{
+            "add",
+            "Hash a microservice and add it to the hash-lookup service",
+            addCmd,
+        },
+        commandData{
+            "get",
+            "Get the content hash and Docker ID of a microservice",
+            getCmd,
+        },
+        commandData{
+            "list",
+            "List all microservices and data stored by the hash-lookup service",
+            listCmd,
+        },
+        commandData{
+            "delete",
+            "Delete a microservice entry",
+            deleteCmd,
+        },
     }
 
-    cmdArg := os.Args[1]
+    bootstraps *[]multiaddr.Multiaddr
+)
+
+func main() {
+    var err error
+    if bootstraps, err = util.AddBootstrapFlags(); err != nil {
+        log.Fatalln(err)
+    }
+    flag.Usage = usage
+    flag.Parse()
+
+    if len(*bootstraps) == 0 {
+        // TODO: Fallback to checking environment variables for bootstrap?
+        fmt.Println("Error: Must specify the multiaddr of at least one bootstrap node\n")
+        usage()
+        os.Exit(1)
+    }
+
+    if flag.NArg() < 1 {
+        fmt.Fprintln(os.Stderr, "Error: missing required arguments\n")
+        usage()
+        os.Exit(1)
+    }
+
+    positionalArgs := flag.Args()
+    cmdArg := positionalArgs[0]
 
     var cmd commandData
     ok := false
@@ -69,9 +92,9 @@ func main() {
     }
 
     if !ok {
-        fmt.Fprintln(os.Stderr, "Error: <command> not recognized")
+        fmt.Fprintf(os.Stderr, "Error: Command '%s' not recognized\n\n", cmdArg)
         usage()
-        return
+        os.Exit(1)
     }
 
     cmd.Run()
@@ -79,8 +102,13 @@ func main() {
 
 func usage() {
     exeName := getExeName()
-    fmt.Fprintln(os.Stderr, "Usage:", exeName, "<command>\n")
-    fmt.Fprintln(os.Stderr, "<command>")
+    fmt.Fprintf(os.Stderr, "Usage of %s:\n", exeName)
+    fmt.Fprintf(os.Stderr,
+        "$ %s -bootstrap <multiaddr> <command>\n", exeName)
+
+    flag.PrintDefaults()
+
+    fmt.Fprintf(os.Stderr, "\nAvailable commands are:\n")
     for _, cmd := range commands {
         fmt.Fprintln(os.Stderr, "  " + cmd.Name)
         fmt.Fprintln(os.Stderr, "        " + cmd.Help)
@@ -99,8 +127,6 @@ func addCmd() {
         "Hash microservice content from stdin")
     noAddFlag := addFlags.Bool("no-add", false,
         "Only hash the given content, do not add it to hash-lookup service")
-    bootstrapFlag := addFlags.String("bootstrap", "",
-        "For debugging: Connect to specified bootstrap node multiaddress")
 
     addUsage := func() {
         exeName := getExeName()
@@ -116,10 +142,10 @@ func addCmd() {
 <options>`)
         addFlags.PrintDefaults()
     }
-    
+
     addFlags.Usage = addUsage
-    addFlags.Parse(os.Args[2:])
-    
+    addFlags.Parse(flag.Args()[1:])
+
     if len(addFlags.Args()) < 2 {
         fmt.Fprintln(os.Stderr, "Error: missing required arguments")
         addUsage()
@@ -145,13 +171,13 @@ func addCmd() {
     if *fileFlag != "" {
         hash, err = fileHash(*fileFlag)
         if err != nil {
-            panic(err)
+            log.Fatalln(err)
         }
         fmt.Println("Hashed file:", hash)
     } else if *stdinFlag {
         hash, err = stdinHash()
         if err != nil {
-            panic(err)
+            log.Fatalln(err)
         }
         fmt.Println("Hashed stdin:", hash)
     } else {
@@ -170,9 +196,9 @@ func addCmd() {
     fmt.Printf("Adding %s:{ContentHash:%s, DockerHash:%s}\n",
         serviceName, hash, dockerId)
 
-    ctx, node, err := setupNode(*bootstrapFlag)
+    ctx, node, err := setupNode(*bootstraps)
     if err != nil {
-        panic(err)
+        log.Fatalln(err)
     }
     defer node.Host.Close()
     defer node.DHT.Close()
@@ -180,7 +206,7 @@ func addCmd() {
     respStr, err := hashlookup.AddHashWithHostRouting(
         ctx, node.Host, node.RoutingDiscovery, serviceName, hash, dockerId)
     if err != nil {
-        panic(err)
+        log.Fatalln(err)
     }
 
     fmt.Println("Response:", respStr)
@@ -251,8 +277,6 @@ func getHash(fileNode files.Node) (hash string, err error) {
 
 func getCmd() {
     getFlags := flag.NewFlagSet("get", flag.ExitOnError)
-    bootstrapFlag := getFlags.String("bootstrap", "",
-        "For debugging: Connect to specified bootstrap node multiaddress")
 
     getUsage := func() {
         exeName := getExeName()
@@ -265,9 +289,9 @@ func getCmd() {
 <options>`)
         getFlags.PrintDefaults()
     }
-    
+
     getFlags.Usage = getUsage
-    getFlags.Parse(os.Args[2:])
+    getFlags.Parse(flag.Args()[1:])
 
     if len(getFlags.Args()) < 1 {
         fmt.Fprintln(os.Stderr, "Error: missing required argument <name>")
@@ -283,9 +307,9 @@ func getCmd() {
 
     serviceName := getFlags.Arg(0)
 
-    ctx, node, err := setupNode(*bootstrapFlag)
+    ctx, node, err := setupNode(*bootstraps)
     if err != nil {
-        panic(err)
+        log.Fatalln(err)
     }
     defer node.Host.Close()
     defer node.DHT.Close()
@@ -293,7 +317,7 @@ func getCmd() {
     contentHash, dockerHash, err := hashlookup.GetHashWithHostRouting(
         ctx, node.Host, node.RoutingDiscovery, serviceName)
     if err != nil {
-        panic(err)
+        log.Fatalln(err)
     }
     fmt.Println(
         "Response: Content Hash:", contentHash, ", Docker Hash:", dockerHash)
@@ -301,13 +325,11 @@ func getCmd() {
 
 func listCmd() {
     listFlags := flag.NewFlagSet("list", flag.ExitOnError)
-    bootstrapFlag := listFlags.String("bootstrap", "",
-        "For debugging: Connect to specified bootstrap node multiaddress")
-    listFlags.Parse(os.Args[2:])
+    listFlags.Parse(flag.Args()[1:])
 
-    ctx, node, err := setupNode(*bootstrapFlag)
+    ctx, node, err := setupNode(*bootstraps)
     if err != nil {
-        panic(err)
+        log.Fatalln(err)
     }
     defer node.Host.Close()
     defer node.DHT.Close()
@@ -316,7 +338,7 @@ func listCmd() {
         hashlookup.ListHashesWithHostRouting(
         ctx, node.Host, node.RoutingDiscovery)
     if err != nil {
-        panic(err)
+        log.Fatalln(err)
     }
 
     fmt.Println("Response:")
@@ -328,8 +350,6 @@ func listCmd() {
 
 func deleteCmd() {
     deleteFlags := flag.NewFlagSet("delete", flag.ExitOnError)
-    bootstrapFlag := deleteFlags.String("bootstrap", "",
-        "For debugging: Connect to specified bootstrap node multiaddress")
 
     deleteUsage := func() {
         exeName := getExeName()
@@ -342,9 +362,9 @@ func deleteCmd() {
 <options>`)
         deleteFlags.PrintDefaults()
     }
-    
+
     deleteFlags.Usage = deleteUsage
-    deleteFlags.Parse(os.Args[2:])
+    deleteFlags.Parse(flag.Args()[1:])
 
     if len(deleteFlags.Args()) < 1 {
         fmt.Fprintln(os.Stderr, "Error: missing required argument <name>")
@@ -360,9 +380,9 @@ func deleteCmd() {
 
     serviceName := deleteFlags.Arg(0)
 
-    ctx, node, err := setupNode(*bootstrapFlag)
+    ctx, node, err := setupNode(*bootstraps)
     if err != nil {
-        panic(err)
+        log.Fatalln(err)
     }
     defer node.Host.Close()
     defer node.DHT.Close()
@@ -370,19 +390,19 @@ func deleteCmd() {
     respStr, err := hashlookup.DeleteHashWithHostRouting(
         ctx, node.Host, node.RoutingDiscovery, serviceName)
     if err != nil {
-        panic(err)
+        log.Fatalln(err)
     }
 
     fmt.Println("Response:", respStr)
 }
 
-func setupNode(bootstrap string) (
+func setupNode(bootstraps []multiaddr.Multiaddr) (
     ctx context.Context, node p2pnode.Node, err error) {
 
     ctx = context.Background()
     nodeConfig := p2pnode.NewConfig()
-    if bootstrap != "" {
-        nodeConfig.BootstrapPeers = []string{bootstrap}
+    if len(bootstraps) > 0 {
+        nodeConfig.BootstrapPeers = bootstraps
     }
     node, err = p2pnode.NewNode(ctx, nodeConfig)
     if err != nil {
