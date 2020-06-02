@@ -14,6 +14,7 @@ import (
     "net/http"
 
     "github.com/libp2p/go-libp2p-core/network"
+    "github.com/libp2p/go-libp2p-core/pnet"
 
     "go.etcd.io/etcd/clientv3"
 
@@ -43,12 +44,16 @@ func main() {
     var err error
     var keyFlags util.KeyFlags
     var bootstraps *[]multiaddr.Multiaddr
+    var psk *pnet.PSK
     if keyFlags, err = util.AddKeyFlags(defaultKeyFile); err != nil {
         log.Fatalln(err)
     }
     if bootstraps, err = util.AddBootstrapFlags(); err != nil {
         log.Fatalln(err)
     }
+    if psk, err = util.AddPSKFlag(); err != nil {
+		log.Fatalln(err)
+	}
     newEtcdClusterFlag := flag.Bool("new-etcd-cluster", false,
         "Start running new etcd cluster")
     etcdIpFlag := flag.String("etcd-ip", "127.0.0.1",
@@ -148,6 +153,7 @@ func main() {
 
     nodeConfig := p2pnode.NewConfig()
     nodeConfig.PrivKey = priv
+    nodeConfig.PSK = *psk
     if *localFlag {
         nodeConfig.BootstrapPeers = []multiaddr.Multiaddr{}
     } else if len(*bootstraps) > 0 {

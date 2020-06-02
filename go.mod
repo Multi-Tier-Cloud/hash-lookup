@@ -3,7 +3,7 @@ module github.com/Multi-Tier-Cloud/hash-lookup
 go 1.13
 
 require (
-	github.com/Multi-Tier-Cloud/common v0.5.0
+	github.com/Multi-Tier-Cloud/common v0.6.1
 	github.com/ipfs/go-blockservice v0.1.2
 	github.com/ipfs/go-ipfs v0.4.22-0.20200219161038-21f6e19f2f37
 	github.com/ipfs/go-ipfs-files v0.0.6
