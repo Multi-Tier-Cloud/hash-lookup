@@ -52,14 +52,14 @@ func TestCreateDockerBuildContext(t *testing.T) {
 }
 
 func TestBuildServiceImage(t *testing.T) {
-    err := buildServiceImage("image.conf", "test", "test-image:1.0")
+    err := buildServiceImage("image.conf", "test", "hivanco/test-image:1.0" "test-service:1.0")
     if err != nil {
         t.Errorf("%v", err)
     }
 }
 
 func TestSaveImage(t *testing.T) {
-    imageBytes, err := saveImage("test-image:1.0")
+    imageBytes, err := saveImage("hivanco/test-image:1.0")
     if err != nil {
         t.Errorf("%v", err)
     }

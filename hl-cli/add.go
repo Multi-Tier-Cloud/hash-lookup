@@ -38,10 +38,10 @@ import (
 
 func addCmd() {
     addFlags := flag.NewFlagSet("add", flag.ExitOnError)
-    fileFlag := addFlags.String("file", "",
-        "Hash microservice content from file, or directory (recursively)")
-    stdinFlag := addFlags.Bool("stdin", false,
-        "Hash microservice content from stdin")
+    // fileFlag := addFlags.String("file", "",
+    //     "Hash microservice content from file, or directory (recursively)")
+    // stdinFlag := addFlags.Bool("stdin", false,
+    //     "Hash microservice content from stdin")
     noAddFlag := addFlags.Bool("no-add", false,
         "Only hash the given content, do not add it to hash-lookup service")
     bootstrapFlag := addFlags.String("bootstrap", "",
@@ -49,14 +49,20 @@ func addCmd() {
 
     addUsage := func() {
         exeName := getExeName()
-        fmt.Fprintln(os.Stderr, "Usage:", exeName, "add [<options>] <docker-image> <name>")
+        fmt.Fprintln(os.Stderr, "Usage:", exeName, "add [<options>] <config> <dir> <image-name> <service-name>")
         fmt.Fprintln(os.Stderr,
 `
-<docker-image>
-        Docker image of microservice to push to DockerHub (<username>/<repository>:<tag>)
+<config>
+        Configuration file
 
-<name>
-        Name of microservice to associate hashed content with
+<dir>
+        Directory to find files listed in config
+
+<image-name>
+        Docker image of microservice to push to (<username>/<repository>:<tag>)
+
+<service-name>
+        Name of microservice to register with hash lookup
 
 <options>`)
         addFlags.PrintDefaults()
@@ -65,66 +71,83 @@ func addCmd() {
     addFlags.Usage = addUsage
     addFlags.Parse(os.Args[2:])
     
-    if len(addFlags.Args()) < 2 {
+    if len(addFlags.Args()) < 4 {
         fmt.Fprintln(os.Stderr, "Error: missing required arguments")
         addUsage()
         return
     }
 
-    if len(addFlags.Args()) > 2 {
+    if len(addFlags.Args()) > 4 {
         fmt.Fprintln(os.Stderr, "Error: too many arguments")
         addUsage()
         return
     }
 
-    if *fileFlag != "" && *stdinFlag {
-        fmt.Fprintln(os.Stderr,
-            "Error: --file and --stdin are mutually exclusive options")
-        addUsage()
-        return
+    // if *fileFlag != "" && *stdinFlag {
+    //     fmt.Fprintln(os.Stderr,
+    //         "Error: --file and --stdin are mutually exclusive options")
+    //     addUsage()
+    //     return
+    // }
+
+    // var hash string = ""
+    // var err error = nil
+
+    // if *fileFlag != "" {
+    //     hash, err = fileHash(*fileFlag)
+    //     if err != nil {
+    //         panic(err)
+    //     }
+    //     fmt.Println("Hashed file:", hash)
+    // } else if *stdinFlag {
+    //     hash, err = stdinHash()
+    //     if err != nil {
+    //         panic(err)
+    //     }
+    //     fmt.Println("Hashed stdin:", hash)
+    // } else {
+    //     fmt.Fprintln(os.Stderr,
+    //         "Error: must specify either the --file or --stdin options")
+    //     addUsage()
+    //     return
+    // }
+
+    configFile := addFlags.Arg(0)
+    srcDir := addFlags.Arg(1)
+    imageName := addFlags.Arg(2)
+    serviceName := addFlags.Arg(3)
+
+    err := buildServiceImage(configFile, srcDir, imageName, serviceName)
+    if err != nil {
+        panic(err)
     }
 
-    var hash string = ""
-    var err error = nil
-
-    if *fileFlag != "" {
-        hash, err = fileHash(*fileFlag)
-        if err != nil {
-            panic(err)
-        }
-        fmt.Println("Hashed file:", hash)
-    } else if *stdinFlag {
-        hash, err = stdinHash()
-        if err != nil {
-            panic(err)
-        }
-        fmt.Println("Hashed stdin:", hash)
-    } else {
-        fmt.Fprintln(os.Stderr,
-            "Error: must specify either the --file or --stdin options")
-        addUsage()
-        return
+    imageBytes, err := saveImage(imageName)
+    if err != nil {
+        panic(err)
     }
 
-    if *noAddFlag {
-        return
+    hash, err := bytesHash(imageBytes)
+    if err != nil {
+        panic(err)
     }
 
-    dockerImage := addFlags.Arg(0)
-    serviceName := addFlags.Arg(1)
-
-    digest, err := pushImage(dockerImage)
+    digest, err := pushImage(imageName)
     if err != nil {
         panic(err)
     }
 
     fmt.Println("Pushed to DockerHub successfully")
 
-    parts := strings.Split(dockerImage, ":")
+    parts := strings.Split(imageName, ":")
     dockerId := parts[0] + "@" + digest
 
     fmt.Printf("Adding %s:{ContentHash:%s, DockerHash:%s}\n",
         serviceName, hash, dockerId)
+    
+    if *noAddFlag {
+        return
+    }
 
     ctx, node, err := setupNode(*bootstrapFlag)
     if err != nil {
@@ -162,7 +185,7 @@ ENV PROXY_IP=127.0.0.1
 ENV SERVICE_PORT=8080
 `
 
-func buildServiceImage(configFile, srcDir, serviceName string) error {
+func buildServiceImage(configFile, srcDir, imageName, serviceName string) error {
     configBytes, err := ioutil.ReadFile(configFile)
     if err != nil {
         return err
@@ -177,7 +200,7 @@ func buildServiceImage(configFile, srcDir, serviceName string) error {
         return err
     }
 
-    err = buildImage(buildContext, serviceName)
+    err = buildImage(buildContext, imageName)
     if err != nil {
         return err
     }
@@ -484,6 +507,11 @@ func stdinHash() (hash string, err error) {
     stdinFile := files.NewBytesFile(stdinData)
 
     return getHash(stdinFile)
+}
+
+func bytesHash(data []byte) (hash string, err error) {
+    bytesFile := files.NewBytesFile(data)
+    return getHash(bytesFile)
 }
 
 func getHash(fileNode files.Node) (hash string, err error) {
