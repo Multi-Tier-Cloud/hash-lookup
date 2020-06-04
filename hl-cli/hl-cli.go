@@ -32,6 +32,8 @@ import (
     "github.com/ipfs/go-mfs"
     "github.com/ipfs/go-unixfs"
 
+    "github.com/libp2p/go-libp2p-core/pnet"
+
     "github.com/multiformats/go-multiaddr"
 
     "github.com/Multi-Tier-Cloud/common/p2pnode"
@@ -70,11 +72,15 @@ var (
     }
 
     bootstraps *[]multiaddr.Multiaddr
+    psk *pnet.PSK
 )
 
 func main() {
     var err error
     if bootstraps, err = util.AddBootstrapFlags(); err != nil {
+        log.Fatalln(err)
+    }
+    if psk, err = util.AddPSKFlag(); err != nil {
         log.Fatalln(err)
     }
     flag.Usage = usage
@@ -118,8 +124,11 @@ func usage() {
     exeName := getExeName()
     fmt.Fprintf(os.Stderr, "Usage of %s:\n", exeName)
     fmt.Fprintf(os.Stderr,
-        "$ %s -bootstrap <multiaddr> <command>\n", exeName)
+        "$ %s [OPTIONS ...] <command>\n", exeName)
 
+    // NOTE: Bootstrap is technically *mandatory* right now, not optional,
+    //       at least until we can get a fallback working (TODO).
+    fmt.Fprintf(os.Stderr, "\nOPTIONS:\n")
     flag.PrintDefaults()
 
     fmt.Fprintf(os.Stderr, "\nAvailable commands are:\n")
@@ -210,7 +219,7 @@ func addCmd() {
     fmt.Printf("Adding %s:{ContentHash:%s, DockerHash:%s}\n",
         serviceName, hash, dockerId)
 
-    ctx, node, err := setupNode(*bootstraps)
+    ctx, node, err := setupNode(*bootstraps, *psk)
     if err != nil {
         log.Fatalln(err)
     }
@@ -321,7 +330,7 @@ func getCmd() {
 
     serviceName := getFlags.Arg(0)
 
-    ctx, node, err := setupNode(*bootstraps)
+    ctx, node, err := setupNode(*bootstraps, *psk)
     if err != nil {
         log.Fatalln(err)
     }
@@ -341,7 +350,7 @@ func listCmd() {
     listFlags := flag.NewFlagSet("list", flag.ExitOnError)
     listFlags.Parse(flag.Args()[1:])
 
-    ctx, node, err := setupNode(*bootstraps)
+    ctx, node, err := setupNode(*bootstraps, *psk)
     if err != nil {
         log.Fatalln(err)
     }
@@ -394,7 +403,7 @@ func deleteCmd() {
 
     serviceName := deleteFlags.Arg(0)
 
-    ctx, node, err := setupNode(*bootstraps)
+    ctx, node, err := setupNode(*bootstraps, *psk)
     if err != nil {
         log.Fatalln(err)
     }
@@ -410,11 +419,12 @@ func deleteCmd() {
     fmt.Println("Response:", respStr)
 }
 
-func setupNode(bootstraps []multiaddr.Multiaddr) (
+func setupNode(bootstraps []multiaddr.Multiaddr, psk pnet.PSK) (
     ctx context.Context, node p2pnode.Node, err error) {
 
     ctx = context.Background()
     nodeConfig := p2pnode.NewConfig()
+    nodeConfig.PSK = psk
     if len(bootstraps) > 0 {
         nodeConfig.BootstrapPeers = bootstraps
     }

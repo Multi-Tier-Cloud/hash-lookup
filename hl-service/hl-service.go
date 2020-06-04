@@ -66,8 +66,8 @@ func main() {
         log.Fatalln(err)
     }
     if psk, err = util.AddPSKFlag(); err != nil {
-		log.Fatalln(err)
-	}
+        log.Fatalln(err)
+    }
     newEtcdClusterFlag := flag.Bool("new-etcd-cluster", false,
         "Start running new etcd cluster")
     etcdIpFlag := flag.String("etcd-ip", "127.0.0.1",
