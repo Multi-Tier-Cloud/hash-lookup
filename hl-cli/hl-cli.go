@@ -223,8 +223,7 @@ func addCmd() {
     if err != nil {
         log.Fatalln(err)
     }
-    defer node.Host.Close()
-    defer node.DHT.Close()
+    defer node.Close()
 
     respStr, err := hashlookup.AddHashWithHostRouting(
         ctx, node.Host, node.RoutingDiscovery, serviceName, hash, dockerId)
@@ -334,8 +333,7 @@ func getCmd() {
     if err != nil {
         log.Fatalln(err)
     }
-    defer node.Host.Close()
-    defer node.DHT.Close()
+    defer node.Close()
 
     contentHash, dockerHash, err := hashlookup.GetHashWithHostRouting(
         ctx, node.Host, node.RoutingDiscovery, serviceName)
@@ -354,8 +352,7 @@ func listCmd() {
     if err != nil {
         log.Fatalln(err)
     }
-    defer node.Host.Close()
-    defer node.DHT.Close()
+    defer node.Close()
 
     serviceNames, contentHashes, dockerHashes, err :=
         hashlookup.ListHashesWithHostRouting(
@@ -407,8 +404,7 @@ func deleteCmd() {
     if err != nil {
         log.Fatalln(err)
     }
-    defer node.Host.Close()
-    defer node.DHT.Close()
+    defer node.Close()
 
     respStr, err := hashlookup.DeleteHashWithHostRouting(
         ctx, node.Host, node.RoutingDiscovery, serviceName)

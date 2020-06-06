@@ -16,8 +16,8 @@ github.com/AndreasBriese/bbloom v0.0.0-20190825152654-46b345b51c96/go.mod h1:bOv
 github.com/BurntSushi/toml v0.3.1 h1:WXkYYl6Yr3qBf1K79EBnL4mak0OimBfB0XUf9Vl28OQ=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/Kubuxu/go-os-helper v0.0.1/go.mod h1:N8B+I7vPCT80IcP58r50u4+gEEcsZETFUpAzWW2ep1Y=
-github.com/Multi-Tier-Cloud/common v0.7.0 h1:8IdLm5WPPXse34c4bCErhAjiLXZ1MW+oNe5zBbKc9SE=
-github.com/Multi-Tier-Cloud/common v0.7.0/go.mod h1:2zoWM+qIg3YiMNJTfwQpIGtWxV36S5aSVzXlPJdeFGA=
+github.com/Multi-Tier-Cloud/common v0.8.1 h1:6Bg+9CJHsARUiRS5d6QIurBEqs8hS048phUARCi1830=
+github.com/Multi-Tier-Cloud/common v0.8.1/go.mod h1:Ami9dJDjyI6O6JHytzHoctObdB4s6jxbXi8yCxjmz2c=
 github.com/OneOfOne/xxhash v1.2.2 h1:KMrpdQIwFcEqXDklaen+P1axHaj9BSKzvpUUfnHldSE=
 github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAElWljhcU=
 github.com/Stebalien/go-bitfield v0.0.0-20180330043415-076a62f9ce6e/go.mod h1:3oM7gXIttpYDAJXpVNnSCiUMYBLIZ6cb1t+Ip982MRo=
