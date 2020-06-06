@@ -83,8 +83,28 @@ func main() {
         "Listening address/endpoint for Prometheus to scrape")
     flag.Parse()
 
+    // If CLI didn't specify any bootstraps, fallback to environment variable
     if !(*localFlag) && len(*bootstraps) == 0 {
-        log.Fatalln("Must specify the multiaddr of at least one bootstrap node")
+        envBootstraps, err := util.GetEnvBootstraps()
+        if err != nil {
+            log.Fatalln(err)
+        }
+
+        if len(envBootstraps) == 0 {
+            log.Fatalln("Error: Must specify the multiaddr of at least one bootstrap node")
+        }
+
+        *bootstraps = envBootstraps
+    }
+
+    // If CLI didn't specify a PSK, check the environment variables
+    if *psk == nil {
+        envPsk, err := util.GetEnvPSK()
+        if err != nil {
+            log.Fatalln(err)
+        }
+
+        *psk = envPsk
     }
 
     priv, err := util.CreateOrLoadKey(keyFlags)

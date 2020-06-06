@@ -86,11 +86,30 @@ func main() {
     flag.Usage = usage
     flag.Parse()
 
+    // If CLI didn't specify any bootstraps, fallback to environment variable
     if len(*bootstraps) == 0 {
-        // TODO: Fallback to checking environment variables for bootstrap?
-        fmt.Println("Error: Must specify the multiaddr of at least one bootstrap node\n")
-        usage()
-        os.Exit(1)
+        envBootstraps, err := util.GetEnvBootstraps()
+        if err != nil {
+            log.Fatalln(err)
+        }
+
+        if len(envBootstraps) == 0 {
+            fmt.Println("Error: Must specify the multiaddr of at least one bootstrap node\n")
+            usage()
+            os.Exit(1)
+        }
+
+        *bootstraps = envBootstraps
+    }
+
+    // If CLI didn't specify a PSK, check the environment variables
+    if *psk == nil {
+        envPsk, err := util.GetEnvPSK()
+        if err != nil {
+            log.Fatalln(err)
+        }
+
+        *psk = envPsk
     }
 
     if flag.NArg() < 1 {
