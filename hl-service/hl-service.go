@@ -132,7 +132,7 @@ func main() {
 
     if !(*newEtcdClusterFlag) {
         initialCluster, err = sendMemberAddRequest(
-            etcdName, etcdPeerUrl, *localFlag, *bootstraps)
+            etcdName, etcdPeerUrl, *localFlag, *bootstraps, *psk)
         if err != nil {
             panic(err)
         }
@@ -209,8 +209,7 @@ func main() {
             panic(err)
         }
     }
-    defer node.Host.Close()
-    defer node.DHT.Close()
+    defer node.Close()
 
     // log.Println("Host ID:", node.Host.ID())
     // log.Println("Listening on:", node.Host.Addrs())
