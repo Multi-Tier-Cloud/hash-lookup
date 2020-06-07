@@ -5,21 +5,15 @@ import (
     "bufio"
     "bytes"
     "context"
-    "encoding/base64"
     "encoding/json"
-    "errors"
     "flag"
     "fmt"
-    "io"
     "io/ioutil"
     "os"
     "os/exec"
     "path/filepath"
     "strings"
     "syscall"
-    
-    "github.com/docker/docker/api/types"
-    "github.com/docker/docker/client"
     
     "github.com/ipfs/go-blockservice"
     "github.com/ipfs/go-ipfs/core"
@@ -32,16 +26,13 @@ import (
 
     "golang.org/x/crypto/ssh/terminal"
 
+    driver "github.com/Multi-Tier-Cloud/docker-driver/docker_driver"
     "github.com/Multi-Tier-Cloud/hash-lookup/hashlookup"
     "github.com/Multi-Tier-Cloud/service-manager/conf"
 )
 
 func addCmd() {
     addFlags := flag.NewFlagSet("add", flag.ExitOnError)
-    // fileFlag := addFlags.String("file", "",
-    //     "Hash microservice content from file, or directory (recursively)")
-    // stdinFlag := addFlags.Bool("stdin", false,
-    //     "Hash microservice content from stdin")
     noAddFlag := addFlags.Bool("no-add", false,
         "Only hash the given content, do not add it to hash-lookup service")
     bootstrapFlag := addFlags.String("bootstrap", "",
@@ -83,35 +74,6 @@ func addCmd() {
         return
     }
 
-    // if *fileFlag != "" && *stdinFlag {
-    //     fmt.Fprintln(os.Stderr,
-    //         "Error: --file and --stdin are mutually exclusive options")
-    //     addUsage()
-    //     return
-    // }
-
-    // var hash string = ""
-    // var err error = nil
-
-    // if *fileFlag != "" {
-    //     hash, err = fileHash(*fileFlag)
-    //     if err != nil {
-    //         panic(err)
-    //     }
-    //     fmt.Println("Hashed file:", hash)
-    // } else if *stdinFlag {
-    //     hash, err = stdinHash()
-    //     if err != nil {
-    //         panic(err)
-    //     }
-    //     fmt.Println("Hashed stdin:", hash)
-    // } else {
-    //     fmt.Fprintln(os.Stderr,
-    //         "Error: must specify either the --file or --stdin options")
-    //     addUsage()
-    //     return
-    // }
-
     configFile := addFlags.Arg(0)
     srcDir := addFlags.Arg(1)
     imageName := addFlags.Arg(2)
@@ -122,7 +84,7 @@ func addCmd() {
         panic(err)
     }
 
-    imageBytes, err := saveImage(imageName)
+    imageBytes, err := driver.SaveImage(imageName)
     if err != nil {
         panic(err)
     }
@@ -200,7 +162,7 @@ func buildServiceImage(configFile, srcDir, imageName, serviceName string) error 
         return err
     }
 
-    err = buildImage(buildContext, imageName)
+    err = driver.BuildImage(buildContext, imageName)
     if err != nil {
         return err
     }
@@ -356,64 +318,7 @@ func tarAddFile(tw *tar.Writer, srcPath, dstPath string) error {
     return nil
 }
 
-func buildImage(buildContext io.Reader, imageName string) error {
-    ctx := context.Background()
-    cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-    if err != nil {
-        return err
-    }
-
-    resp, err := cli.ImageBuild(ctx, buildContext, types.ImageBuildOptions{Tags: []string{imageName}})
-    if err != nil {
-        return err
-    }
-    defer resp.Body.Close()
-
-    scanner := bufio.NewScanner(resp.Body)
-    for scanner.Scan() {
-        line := scanner.Text()
-        // fmt.Println(line)
-
-        var respBodyObject struct {
-            // Normal response lines have "stream" field instead of "error"
-            Error string
-        }
-
-        err = json.Unmarshal([]byte(line), &respBodyObject)
-        if err != nil {
-            return err
-        }
-
-        if respBodyObject.Error != "" {
-            return errors.New(respBodyObject.Error)
-        }
-    }
-
-    return nil
-}
-
-func saveImage(imageName string) ([]byte, error) {
-    ctx := context.Background()
-    cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-    if err != nil {
-        return nil, err
-    }
-
-    resp, err := cli.ImageSave(ctx, []string{imageName})
-    if err != nil {
-        return nil, err
-    }
-    defer resp.Close()
-
-    respBytes, err := ioutil.ReadAll(resp)
-    if err != nil {
-        return nil, err
-    }
-
-    return respBytes, nil
-}
-
-func getAuth() (string, error) {
+func pushImage(image string) (string, error) {
     fmt.Println("DockerHub login")
     scanner := bufio.NewScanner(os.Stdin)
     fmt.Print("Username: ")
@@ -426,87 +331,17 @@ func getAuth() (string, error) {
     }
     fmt.Println()
 
-    authConfig := types.AuthConfig{
-        Username: username,
-        Password: string(passwordBytes),
-    }
-    encodedJSON, err := json.Marshal(authConfig)
-    if err != nil {
-        return "", err
-    }
-    authStr := base64.URLEncoding.EncodeToString(encodedJSON)
-    return authStr, nil
-}
-
-func pushImage(image string) (string, error) {
-    authStr, err := getAuth()
+    auth, err := driver.CreateEncodedAuth(username, string(passwordBytes))
     if err != nil {
         return "", err
     }
 
-    ctx := context.Background()
-    cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+    digest, err := driver.PushImage(auth, image)
     if err != nil {
         return "", err
     }
 
-    resp, err := cli.ImagePush(ctx, image, types.ImagePushOptions{RegistryAuth:authStr})
-    if err != nil {
-        return "", err
-    }
-    defer resp.Close()
-
-    scanner := bufio.NewScanner(resp)
-    for scanner.Scan() {
-        line := scanner.Text()
-        // fmt.Println(line)
-
-        var respObject struct {
-            Aux struct {
-                Digest string
-            }
-            Error string
-        }
-
-        err = json.Unmarshal([]byte(line), &respObject)
-        if err != nil {
-            return "", err
-        }
-
-        if respObject.Aux.Digest != "" {
-            return respObject.Aux.Digest, nil
-        } else if respObject.Error != "" {
-            return "", errors.New(respObject.Error)
-        }
-    }
-
-    return "", errors.New("hl-cli: Error did not receive digest")
-}
-
-func fileHash(path string) (hash string, err error) {
-    stat, err := os.Lstat(path)
-    if err != nil {
-        return "", err
-    }
-
-    fileNode, err := files.NewSerialFile(path, false, stat)
-    if err != nil {
-        return "", err
-    }
-    defer fileNode.Close()
-
-    return getHash(fileNode)
-}
-
-func stdinHash() (hash string, err error) {
-    stdinData, err := ioutil.ReadAll(os.Stdin)
-    if err != nil {
-        return "", err
-    }
-
-    stdinFile := files.NewBytesFile(stdinData)
-
-    return getHash(stdinFile)
+    return digest, nil
 }
 
 func bytesHash(data []byte) (hash string, err error) {
