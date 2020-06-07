@@ -22,6 +22,7 @@ import (
     "strings"
 
 	"github.com/libp2p/go-libp2p-core/network"
+	"github.com/libp2p/go-libp2p-core/pnet"
 	"github.com/libp2p/go-libp2p-core/protocol"
 
     "go.etcd.io/etcd/clientv3"
@@ -42,10 +43,12 @@ type memberAddRequest struct {
 
 func sendMemberAddRequest(
     newMemName, newMemPeerUrl string, local bool,
-    bootstraps []multiaddr.Multiaddr) (initialCluster string, err error) {
+    bootstraps []multiaddr.Multiaddr,
+    psk pnet.PSK) (initialCluster string, err error) {
 
     ctx := context.Background()
     nodeConfig := p2pnode.NewConfig()
+    nodeConfig.PSK = psk
     if local {
         nodeConfig.BootstrapPeers = []multiaddr.Multiaddr{}
     } else if len(bootstraps) > 0 {
@@ -55,8 +58,7 @@ func sendMemberAddRequest(
     if err != nil {
         return "", err
     }
-    defer node.Host.Close()
-    defer node.DHT.Close()
+    defer node.Close()
 
     reqInfo := memberAddRequest{newMemName, newMemPeerUrl}
     reqBytes, err := json.Marshal(reqInfo)

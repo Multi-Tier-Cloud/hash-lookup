@@ -285,6 +285,7 @@ func getHash(fileNode files.Node) (hash string, err error) {
     if err != nil {
         return "", err
     }
+    defer nilIpfsNode.Close()
 
     bserv := blockservice.New(nilIpfsNode.Blockstore, nilIpfsNode.Exchange)
     dserv := dag.NewDAGService(bserv)

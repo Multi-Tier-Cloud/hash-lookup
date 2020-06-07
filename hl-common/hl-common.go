@@ -23,8 +23,11 @@ import (
     "time"
 
     "github.com/libp2p/go-libp2p-core/host"
+    "github.com/libp2p/go-libp2p-core/pnet"
     "github.com/libp2p/go-libp2p-core/protocol"
     "github.com/libp2p/go-libp2p-discovery"
+
+    "github.com/multiformats/go-multiaddr"
 
     "github.com/Multi-Tier-Cloud/common/p2pnode"
     "github.com/Multi-Tier-Cloud/common/p2putil"
@@ -63,17 +66,19 @@ func init() {
     log.SetFlags(log.Ldate | log.Lmicroseconds | log.Lshortfile)
 }
 
-func SendRequest(protocolID protocol.ID, request []byte) (
+func SendRequest(bootstraps []multiaddr.Multiaddr, psk pnet.PSK,
+    protocolID protocol.ID, request []byte) (
     response []byte, err error) {
 
     ctx := context.Background()
     nodeConfig := p2pnode.NewConfig()
+    nodeConfig.BootstrapPeers = bootstraps
+    nodeConfig.PSK = psk
     node, err := p2pnode.NewNode(ctx, nodeConfig)
     if err != nil {
         return nil, err
     }
-    defer node.Host.Close()
-    defer node.DHT.Close()
+    defer node.Close()
 
     return SendRequestWithHostRouting(
         ctx, node.Host, node.RoutingDiscovery, protocolID, request)
