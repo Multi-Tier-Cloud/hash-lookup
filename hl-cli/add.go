@@ -9,6 +9,7 @@ import (
     "flag"
     "fmt"
     "io/ioutil"
+    "log"
     "os"
     "os/exec"
     "path/filepath"
@@ -35,8 +36,6 @@ func addCmd() {
     addFlags := flag.NewFlagSet("add", flag.ExitOnError)
     noAddFlag := addFlags.Bool("no-add", false,
         "Only hash the given content, do not add it to hash-lookup service")
-    bootstrapFlag := addFlags.String("bootstrap", "",
-        "For debugging: Connect to specified bootstrap node multiaddress")
 
     addUsage := func() {
         exeName := getExeName()
@@ -60,7 +59,7 @@ func addCmd() {
     }
     
     addFlags.Usage = addUsage
-    addFlags.Parse(os.Args[2:])
+    addFlags.Parse(flag.Args()[1:])
     
     if len(addFlags.Args()) < 4 {
         fmt.Fprintln(os.Stderr, "Error: missing required arguments")
@@ -81,22 +80,22 @@ func addCmd() {
 
     err := buildServiceImage(configFile, srcDir, imageName, serviceName)
     if err != nil {
-        panic(err)
+        log.Fatalln(err)
     }
 
     imageBytes, err := driver.SaveImage(imageName)
     if err != nil {
-        panic(err)
+        log.Fatalln(err)
     }
 
     hash, err := bytesHash(imageBytes)
     if err != nil {
-        panic(err)
+        log.Fatalln(err)
     }
 
     digest, err := pushImage(imageName)
     if err != nil {
-        panic(err)
+        log.Fatalln(err)
     }
 
     fmt.Println("Pushed to DockerHub successfully")
@@ -111,17 +110,16 @@ func addCmd() {
         return
     }
 
-    ctx, node, err := setupNode(*bootstrapFlag)
+    ctx, node, err := setupNode(*bootstraps, *psk)
     if err != nil {
-        panic(err)
+        log.Fatalln(err)
     }
-    defer node.Host.Close()
-    defer node.DHT.Close()
+    defer node.Close()
 
     respStr, err := hashlookup.AddHashWithHostRouting(
         ctx, node.Host, node.RoutingDiscovery, serviceName, hash, dockerId)
     if err != nil {
-        panic(err)
+        log.Fatalln(err)
     }
 
     fmt.Println("Response:", respStr)

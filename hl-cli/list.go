@@ -3,29 +3,27 @@ package main
 import (
     "flag"
     "fmt"
-    "os"
+    "log"
 
     "github.com/Multi-Tier-Cloud/hash-lookup/hashlookup"
 )
 
 func listCmd() {
     listFlags := flag.NewFlagSet("list", flag.ExitOnError)
-    bootstrapFlag := listFlags.String("bootstrap", "",
-        "For debugging: Connect to specified bootstrap node multiaddress")
-    listFlags.Parse(os.Args[2:])
 
-    ctx, node, err := setupNode(*bootstrapFlag)
+    listFlags.Parse(flag.Args()[1:])
+
+    ctx, node, err := setupNode(*bootstraps, *psk)
     if err != nil {
-        panic(err)
+        log.Fatalln(err)
     }
-    defer node.Host.Close()
-    defer node.DHT.Close()
+    defer node.Close()
 
     serviceNames, contentHashes, dockerHashes, err :=
         hashlookup.ListHashesWithHostRouting(
         ctx, node.Host, node.RoutingDiscovery)
     if err != nil {
-        panic(err)
+        log.Fatalln(err)
     }
 
     fmt.Println("Response:")

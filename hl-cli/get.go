@@ -3,6 +3,7 @@ package main
 import (
     "flag"
     "fmt"
+    "log"
     "os"
 
     "github.com/Multi-Tier-Cloud/hash-lookup/hashlookup"
@@ -10,8 +11,6 @@ import (
 
 func getCmd() {
     getFlags := flag.NewFlagSet("get", flag.ExitOnError)
-    bootstrapFlag := getFlags.String("bootstrap", "",
-        "For debugging: Connect to specified bootstrap node multiaddress")
 
     getUsage := func() {
         exeName := getExeName()
@@ -26,7 +25,7 @@ func getCmd() {
     }
     
     getFlags.Usage = getUsage
-    getFlags.Parse(os.Args[2:])
+    getFlags.Parse(flag.Args()[1:])
 
     if len(getFlags.Args()) < 1 {
         fmt.Fprintln(os.Stderr, "Error: missing required argument <name>")
@@ -42,17 +41,16 @@ func getCmd() {
 
     serviceName := getFlags.Arg(0)
 
-    ctx, node, err := setupNode(*bootstrapFlag)
+    ctx, node, err := setupNode(*bootstraps, *psk)
     if err != nil {
-        panic(err)
+        log.Fatalln(err)
     }
-    defer node.Host.Close()
-    defer node.DHT.Close()
+    defer node.Close()
 
     contentHash, dockerHash, err := hashlookup.GetHashWithHostRouting(
         ctx, node.Host, node.RoutingDiscovery, serviceName)
     if err != nil {
-        panic(err)
+        log.Fatalln(err)
     }
     fmt.Println(
         "Response: Content Hash:", contentHash, ", Docker Hash:", dockerHash)

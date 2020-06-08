@@ -3,6 +3,7 @@ package main
 import (
     "flag"
     "fmt"
+    "log"
     "os"
 
     "github.com/Multi-Tier-Cloud/hash-lookup/hashlookup"
@@ -10,8 +11,6 @@ import (
 
 func deleteCmd() {
     deleteFlags := flag.NewFlagSet("delete", flag.ExitOnError)
-    bootstrapFlag := deleteFlags.String("bootstrap", "",
-        "For debugging: Connect to specified bootstrap node multiaddress")
 
     deleteUsage := func() {
         exeName := getExeName()
@@ -26,7 +25,7 @@ func deleteCmd() {
     }
     
     deleteFlags.Usage = deleteUsage
-    deleteFlags.Parse(os.Args[2:])
+    deleteFlags.Parse(flag.Args()[1:])
 
     if len(deleteFlags.Args()) < 1 {
         fmt.Fprintln(os.Stderr, "Error: missing required argument <name>")
@@ -42,17 +41,16 @@ func deleteCmd() {
 
     serviceName := deleteFlags.Arg(0)
 
-    ctx, node, err := setupNode(*bootstrapFlag)
+    ctx, node, err := setupNode(*bootstraps, *psk)
     if err != nil {
-        panic(err)
+        log.Fatalln(err)
     }
-    defer node.Host.Close()
-    defer node.DHT.Close()
+    defer node.Close()
 
     respStr, err := hashlookup.DeleteHashWithHostRouting(
         ctx, node.Host, node.RoutingDiscovery, serviceName)
     if err != nil {
-        panic(err)
+        log.Fatalln(err)
     }
 
     fmt.Println("Response:", respStr)
