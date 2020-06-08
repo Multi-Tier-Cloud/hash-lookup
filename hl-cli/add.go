@@ -4,7 +4,6 @@ import (
     "archive/tar"
     "bufio"
     "bytes"
-    "context"
     "encoding/json"
     "flag"
     "fmt"
@@ -15,18 +14,10 @@ import (
     "path/filepath"
     "strings"
     "syscall"
-    
-    "github.com/ipfs/go-blockservice"
-    "github.com/ipfs/go-ipfs/core"
-    "github.com/ipfs/go-ipfs/core/coreunix"
-    "github.com/ipfs/go-ipfs-files"
-    dag "github.com/ipfs/go-merkledag"
-    dagtest "github.com/ipfs/go-merkledag/test"
-    "github.com/ipfs/go-mfs"
-    "github.com/ipfs/go-unixfs"
 
     "golang.org/x/crypto/ssh/terminal"
 
+    "github.com/Multi-Tier-Cloud/common/util"
     driver "github.com/Multi-Tier-Cloud/docker-driver/docker_driver"
     "github.com/Multi-Tier-Cloud/hash-lookup/hashlookup"
     "github.com/Multi-Tier-Cloud/service-manager/conf"
@@ -88,7 +79,7 @@ func addCmd() {
         log.Fatalln(err)
     }
 
-    hash, err := bytesHash(imageBytes)
+    hash, err := util.IpfsHashBytes(imageBytes)
     if err != nil {
         log.Fatalln(err)
     }
@@ -340,46 +331,4 @@ func pushImage(image string) (string, error) {
     }
 
     return digest, nil
-}
-
-func bytesHash(data []byte) (hash string, err error) {
-    bytesFile := files.NewBytesFile(data)
-    return getHash(bytesFile)
-}
-
-func getHash(fileNode files.Node) (hash string, err error) {
-    ctx := context.Background()
-    nilIpfsNode, err := core.NewNode(ctx, &core.BuildCfg{NilRepo: true})
-    if err != nil {
-        return "", err
-    }
-
-    bserv := blockservice.New(nilIpfsNode.Blockstore, nilIpfsNode.Exchange)
-    dserv := dag.NewDAGService(bserv)
-
-    fileAdder, err := coreunix.NewAdder(
-        ctx, nilIpfsNode.Pinning, nilIpfsNode.Blockstore, dserv)
-    if err != nil {
-        return "", err
-    }
-
-    fileAdder.Pin = false
-    fileAdder.CidBuilder = dag.V0CidPrefix()
-
-    mockDserv := dagtest.Mock()
-    emptyDirNode := unixfs.EmptyDirNode()
-    emptyDirNode.SetCidBuilder(fileAdder.CidBuilder)
-    mfsRoot, err := mfs.NewRoot(ctx, mockDserv, emptyDirNode, nil)
-    if err != nil {
-        return "", err
-    }
-    fileAdder.SetMfsRoot(mfsRoot)
-
-    dagIpldNode, err := fileAdder.AddAllAndPin(fileNode)
-    if err != nil {
-        return "", err
-    }
-
-    hash = dagIpldNode.String()
-    return hash, nil
 }
