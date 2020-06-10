@@ -83,7 +83,8 @@ func main() {
         }
 
         if len(envBootstraps) == 0 {
-            fmt.Println("Error: Must specify the multiaddr of at least one bootstrap node\n")
+            fmt.Fprintln(os.Stderr, "Error: Must specify the multiaddr of at least one bootstrap node")
+            fmt.Fprintln(os.Stderr)
             usage()
             os.Exit(1)
         }
@@ -102,7 +103,8 @@ func main() {
     }
 
     if flag.NArg() < 1 {
-        fmt.Fprintln(os.Stderr, "Error: missing required arguments\n")
+        fmt.Fprintln(os.Stderr, "Error: missing required arguments")
+        fmt.Fprintln(os.Stderr)
         usage()
         os.Exit(1)
     }

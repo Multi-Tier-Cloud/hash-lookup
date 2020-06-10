@@ -19,16 +19,24 @@ package main
 // In case "go" is not in sudo path
 
 import (
-    "fmt"
     "io/ioutil"
     "os"
+    "path/filepath"
     "testing"
 )
+
+const (
+    testDir string = "add-test"
+    testImageName string = "add-test-image"
+    testServiceName string = "add-test-service"
+)
+
+var testConfigFile string = filepath.Join(testDir, "image-conf.json")
 
 var config ImageConf
 
 func TestMain(m *testing.M) {
-    configBytes, err := ioutil.ReadFile("image.conf")
+    configBytes, err := ioutil.ReadFile(testConfigFile)
     if err != nil {
         panic(err)
     }
@@ -42,42 +50,41 @@ func TestMain(m *testing.M) {
 }
 
 func TestCreateDockerfile(t *testing.T) {
-    dockerfileBytes := createDockerfile(config, "test-name")
-    fmt.Println(string(dockerfileBytes))
+    dockerfileBytes := createDockerfile(config, testServiceName)
+    t.Logf(string(dockerfileBytes))
 }
 
 func TestBuildProxy(t *testing.T) {
-    tmpDir, _, err := buildProxy("")
-    if err != nil {
-        t.Errorf("%v", err)
-    }
-    defer os.RemoveAll(tmpDir)
+    t.Run("BuildProxy-default", func(t *testing.T) {
+        tmpDir, _, err := buildProxy("")
+        if err != nil {
+            t.Errorf("%v", err)
+        }
+        defer os.RemoveAll(tmpDir)
+    })
+
+    t.Run("BuildProxy-tags/v0.1.0", func(t *testing.T) {
+        tmpDir, _, err := buildProxy("tags/v0.1.0")
+        if err != nil {
+            t.Errorf("%v", err)
+        }
+        defer os.RemoveAll(tmpDir)
+    })
 }
 
 func TestCreateDockerBuildContext(t *testing.T) {
-    buildContext, err := createDockerBuildContext(config, "test", "test-name")
+    buildContext, err := createDockerBuildContext(config, testDir, testServiceName, "")
     if err != nil {
         t.Errorf("%v", err)
     }
-    err = ioutil.WriteFile("test.tar", buildContext.Bytes(), 0666)
+    err = ioutil.WriteFile("add-test-generated.tar", buildContext.Bytes(), 0666)
     if err != nil {
         t.Errorf("%v", err)
     }
 }
 
 func TestBuildServiceImage(t *testing.T) {
-    err := buildServiceImage("image.conf", "test", "hivanco/test-image:1.0" "test-service:1.0")
-    if err != nil {
-        t.Errorf("%v", err)
-    }
-}
-
-func TestSaveImage(t *testing.T) {
-    imageBytes, err := saveImage("hivanco/test-image:1.0")
-    if err != nil {
-        t.Errorf("%v", err)
-    }
-    err = ioutil.WriteFile("test-image.tar.gz", imageBytes, 0666)
+    err := buildServiceImage(testConfigFile, testDir,  testImageName, testServiceName, "")
     if err != nil {
         t.Errorf("%v", err)
     }

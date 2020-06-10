@@ -39,8 +39,12 @@ import (
 
 func addCmd() {
     addFlags := flag.NewFlagSet("add", flag.ExitOnError)
+    proxyVersionFlag := addFlags.String("proxy-version", "",
+        "Checkout specific version of proxy by supplying a commit hash. " +
+        "By default, will use latest version checked into service-manager master. " +
+        "This argument is supplied to git checkout <commit>, so a branch name or tags/<tag-name> works as well.")
     noAddFlag := addFlags.Bool("no-add", false,
-        "Only hash the given content, do not add it to hash-lookup service")
+        "Build and push image to DockerHub, but do not add to hash-lookup")
 
     addUsage := func() {
         exeName := getExeName()
@@ -83,7 +87,7 @@ func addCmd() {
     imageName := addFlags.Arg(2)
     serviceName := addFlags.Arg(3)
 
-    err := buildServiceImage(configFile, srcDir, imageName, serviceName)
+    err := buildServiceImage(configFile, srcDir, imageName, serviceName, *proxyVersionFlag)
     if err != nil {
         log.Fatalln(err)
     }
@@ -98,7 +102,7 @@ func addCmd() {
         log.Fatalln(err)
     }
 
-    digest, err := pushImage(imageName)
+    digest, err := authAndPushImage(imageName)
     if err != nil {
         log.Fatalln(err)
     }
@@ -108,7 +112,7 @@ func addCmd() {
     parts := strings.Split(imageName, ":")
     dockerId := parts[0] + "@" + digest
 
-    fmt.Printf("Adding %s:{ContentHash:%s, DockerHash:%s}\n",
+    fmt.Printf("%s : {ContentHash: %s, DockerHash: %s}\n",
         serviceName, hash, dockerId)
     
     if *noAddFlag {
@@ -130,27 +134,7 @@ func addCmd() {
     fmt.Println("Response:", respStr)
 }
 
-type ImageConf struct {
-    PerfConf conf.Config
-
-    DockerConf struct {
-        Copy [][2]string
-        Run []string
-        Cmd string
-    }
-}
-
-const dockerfileCore string =
-`FROM ubuntu:16.04
-WORKDIR /app
-COPY proxy .
-COPY perf.conf .
-ENV PROXY_PORT=4201
-ENV PROXY_IP=127.0.0.1
-ENV SERVICE_PORT=8080
-`
-
-func buildServiceImage(configFile, srcDir, imageName, serviceName string) error {
+func buildServiceImage(configFile, srcDir, imageName, serviceName, proxyVersion string) error {
     configBytes, err := ioutil.ReadFile(configFile)
     if err != nil {
         return err
@@ -160,7 +144,7 @@ func buildServiceImage(configFile, srcDir, imageName, serviceName string) error 
         return err
     }
 
-    buildContext, err := createDockerBuildContext(config, srcDir, serviceName)
+    buildContext, err := createDockerBuildContext(config, srcDir, serviceName, proxyVersion)
     if err != nil {
         return err
     }
@@ -173,6 +157,16 @@ func buildServiceImage(configFile, srcDir, imageName, serviceName string) error 
     return nil
 }
 
+type ImageConf struct {
+    PerfConf conf.Config
+
+    DockerConf struct {
+        Copy [][2]string
+        Run []string
+        Cmd string
+    }
+}
+
 func unmarshalImageConf(configBytes []byte) (config ImageConf, err error) {
     err = json.Unmarshal(configBytes, &config)
     if err != nil {
@@ -181,7 +175,7 @@ func unmarshalImageConf(configBytes []byte) (config ImageConf, err error) {
     return config, nil
 }
 
-func createDockerBuildContext(config ImageConf, srcDir, serviceName string) (
+func createDockerBuildContext(config ImageConf, srcDir, serviceName, proxyVersion string) (
     imageBuildContext *bytes.Buffer, err error) {
 
     imageBuildContext = new(bytes.Buffer)
@@ -208,7 +202,7 @@ func createDockerBuildContext(config ImageConf, srcDir, serviceName string) (
         return nil, err
     }
     perfconfHdr := &tar.Header{
-        Name: "perf.conf",
+        Name: "conf.json",
         Mode: 0646,
         Size: int64(len(perfconfBytes)),
     }
@@ -221,7 +215,7 @@ func createDockerBuildContext(config ImageConf, srcDir, serviceName string) (
         return nil, err
     }
 
-    tmpDir, proxyPath, err := buildProxy("")
+    tmpDir, proxyPath, err := buildProxy(proxyVersion)
     if err != nil {
         return nil, err
     }
@@ -243,6 +237,16 @@ func createDockerBuildContext(config ImageConf, srcDir, serviceName string) (
     return imageBuildContext, nil
 }
 
+const dockerfileCore string =
+`FROM ubuntu:16.04
+WORKDIR /app
+COPY proxy .
+COPY conf.json .
+ENV PROXY_PORT=4201
+ENV PROXY_IP=127.0.0.1
+ENV SERVICE_PORT=8080
+`
+
 func createDockerfile(config ImageConf, serviceName string) []byte {
     var dockerfile bytes.Buffer
     dockerfile.WriteString(dockerfileCore)
@@ -253,7 +257,7 @@ func createDockerfile(config ImageConf, serviceName string) []byte {
         dockerfile.WriteString(fmt.Sprintln("RUN", runCmd))
     }
     dockerfile.WriteString(fmt.Sprintf(
-        "CMD ./proxy $PROXY_PORT %s $PROXY_IP:$SERVICE_PORT > proxy.log 2>&1 & %s\n",
+        "CMD ./proxy --configfile conf.json $PROXY_PORT %s $PROXY_IP:$SERVICE_PORT > proxy.log 2>&1 & %s\n",
         serviceName, config.DockerConf.Cmd))
     return dockerfile.Bytes()
 }
@@ -272,6 +276,18 @@ func buildProxy(version string) (tmpDir, proxyPath string, err error) {
     if err != nil {
         os.RemoveAll(tmpDir)
         return "", "", err
+    }
+
+    if version != "" {
+        checkoutCmd := exec.Command("git", "checkout", version)
+        checkoutCmd.Dir = filepath.Join(tmpDir, "service-manager")
+        checkoutCmd.Stdout = os.Stdout
+        checkoutCmd.Stderr = os.Stderr
+        err = checkoutCmd.Run()
+        if err != nil {
+            os.RemoveAll(tmpDir)
+            return "", "", err
+        }
     }
 
     buildCmd := exec.Command("go", "build", "-o", "proxy")
@@ -321,7 +337,7 @@ func tarAddFile(tw *tar.Writer, srcPath, dstPath string) error {
     return nil
 }
 
-func pushImage(image string) (string, error) {
+func authAndPushImage(image string) (string, error) {
     fmt.Println("DockerHub login")
     scanner := bufio.NewScanner(os.Stdin)
     fmt.Print("Username: ")
