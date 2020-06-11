@@ -37,6 +37,17 @@ import (
     "github.com/Multi-Tier-Cloud/service-manager/conf"
 )
 
+type ImageConf struct {
+    PerfConf conf.Config
+
+    DockerConf struct {
+        Copy [][2]string
+        Run []string
+        Cmd string
+        ProxyClientMode bool
+    }
+}
+
 func addCmd() {
     addFlags := flag.NewFlagSet("add", flag.ExitOnError)
     proxyVersionFlag := addFlags.String("proxy-version", "",
@@ -44,7 +55,7 @@ func addCmd() {
         "By default, will use latest version checked into service-manager master. " +
         "This argument is supplied to git checkout <commit>, so a branch name or tags/<tag-name> works as well.")
     noAddFlag := addFlags.Bool("no-add", false,
-        "Build and push image to DockerHub, but do not add to hash-lookup")
+        "Build image, but do not push to Dockerhub or add to hash-lookup")
 
     addUsage := func() {
         exeName := getExeName()
@@ -92,15 +103,26 @@ func addCmd() {
         log.Fatalln(err)
     }
 
+    fmt.Println("Built image successfully")
+
+    if *noAddFlag {
+        return
+    }
+
     imageBytes, err := driver.SaveImage(imageName)
     if err != nil {
         log.Fatalln(err)
     }
 
+    fmt.Println("Saved image successfully")
+
     hash, err := util.IpfsHashBytes(imageBytes)
     if err != nil {
         log.Fatalln(err)
     }
+
+    fmt.Println("Hashed image successfully:", hash)
+    fmt.Println("Pushing to DockerHub")
 
     digest, err := authAndPushImage(imageName)
     if err != nil {
@@ -114,10 +136,6 @@ func addCmd() {
 
     fmt.Printf("%s : {ContentHash: %s, DockerHash: %s}\n",
         serviceName, hash, dockerId)
-    
-    if *noAddFlag {
-        return
-    }
 
     ctx, node, err := setupNode(*bootstraps, *psk)
     if err != nil {
@@ -155,16 +173,6 @@ func buildServiceImage(configFile, srcDir, imageName, serviceName, proxyVersion 
     }
 
     return nil
-}
-
-type ImageConf struct {
-    PerfConf conf.Config
-
-    DockerConf struct {
-        Copy [][2]string
-        Run []string
-        Cmd string
-    }
 }
 
 func unmarshalImageConf(configBytes []byte) (config ImageConf, err error) {
@@ -256,9 +264,15 @@ func createDockerfile(config ImageConf, serviceName string) []byte {
     for _, runCmd := range config.DockerConf.Run {
         dockerfile.WriteString(fmt.Sprintln("RUN", runCmd))
     }
-    dockerfile.WriteString(fmt.Sprintf(
-        "CMD ./proxy --configfile conf.json $PROXY_PORT %s $PROXY_IP:$SERVICE_PORT > proxy.log 2>&1 & %s\n",
-        serviceName, config.DockerConf.Cmd))
+    if !config.DockerConf.ProxyClientMode {
+        dockerfile.WriteString(fmt.Sprintf(
+            "CMD ./proxy --configfile conf.json $PROXY_PORT %s $PROXY_IP:$SERVICE_PORT > proxy.log 2>&1 & %s\n",
+            serviceName, config.DockerConf.Cmd))
+    } else {
+        dockerfile.WriteString(fmt.Sprintf(
+            "CMD ./proxy --configfile conf.json $PROXY_PORT > proxy.log 2>&1 & %s\n",
+            config.DockerConf.Cmd))
+    }
     return dockerfile.Bytes()
 }
 

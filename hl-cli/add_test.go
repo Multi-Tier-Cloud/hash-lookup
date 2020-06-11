@@ -19,6 +19,7 @@ package main
 // In case "go" is not in sudo path
 
 import (
+    "fmt"
     "io/ioutil"
     "os"
     "path/filepath"
@@ -32,16 +33,26 @@ const (
 )
 
 var testConfigFile string = filepath.Join(testDir, "image-conf.json")
+var testConfigClientFile string = filepath.Join(testDir, "image-conf-client.json")
 
 var config ImageConf
+var configClient ImageConf
 
 func TestMain(m *testing.M) {
     configBytes, err := ioutil.ReadFile(testConfigFile)
     if err != nil {
         panic(err)
     }
-
     config, err = unmarshalImageConf(configBytes)
+    if err != nil {
+        panic(err)
+    }
+
+    configClientBytes, err := ioutil.ReadFile(testConfigClientFile)
+    if err != nil {
+        panic(err)
+    }
+    configClient, err = unmarshalImageConf(configClientBytes)
     if err != nil {
         panic(err)
     }
@@ -50,8 +61,15 @@ func TestMain(m *testing.M) {
 }
 
 func TestCreateDockerfile(t *testing.T) {
-    dockerfileBytes := createDockerfile(config, testServiceName)
-    t.Logf(string(dockerfileBytes))
+    t.Run("CreateDockerfile-default", func(t *testing.T) {
+        dockerfileBytes := createDockerfile(config, testServiceName)
+        fmt.Println(string(dockerfileBytes))
+    })
+
+    t.Run("CreateDockerfile-client", func(t *testing.T) {
+        dockerfileBytes := createDockerfile(configClient, testServiceName)
+        fmt.Println(string(dockerfileBytes))
+    })
 }
 
 func TestBuildProxy(t *testing.T) {
