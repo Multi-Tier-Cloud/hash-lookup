@@ -61,6 +61,13 @@ type ListResponse struct {
     LookupOk bool
 }
 
+type ServiceData struct {
+    ContentHash string
+    DockerHash string
+    SoftReq p2putil.PerfInd
+    HardReq p2putil.PerfInd
+}
+
 func init() {
     // Set up logging defaults
     log.SetFlags(log.Ldate | log.Lmicroseconds | log.Lshortfile)

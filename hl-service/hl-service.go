@@ -99,11 +99,6 @@ func init() {
     log.SetFlags(log.Ldate | log.Lmicroseconds | log.Lshortfile)
 }
 
-type etcdData struct {
-    ContentHash string
-    DockerHash string
-}
-
 func main() {
     var err error
     var keyFlags util.KeyFlags
@@ -222,17 +217,11 @@ func main() {
     // TODO: Remove this test entry at some point...
     //       Currently useful to serve as a negative test case when pulling images
     // BEGIN test entry
-    testData := etcdData{"general", "kenobi"}
-    testDataBytes, err := json.Marshal(testData)
-    if err != nil {
-        panic(err)
-        return
-    }
-    putResp, err := etcdCli.Put(ctx, "hello-there", string(testDataBytes))
+    err = etcdPut(etcdCli, "hello-there", "general", "kenobi")
     if err != nil {
         panic(err)
     }
-    log.Println("etcd Response:", putResp)
+    log.Println("Test entry: {hello-there: {general, kenobi}}")
     // END test entry
 
     nodeConfig := p2pnode.NewConfig()
@@ -288,24 +277,15 @@ func handleAdd(etcdCli *clientv3.Client) func(network.Stream) {
             return
         }
 
-        putData := etcdData{reqInfo.ContentHash, reqInfo.DockerHash}
-        putDataBytes, err := json.Marshal(putData)
+        err = etcdPut(etcdCli, reqInfo.ServiceName, reqInfo.ContentHash, reqInfo.DockerHash)
         if err != nil {
             log.Println(err)
             stream.Reset()
             return
         }
 
-        ctx := context.Background()
-        _, err = etcdCli.Put(ctx, reqInfo.ServiceName, string(putDataBytes))
-        if err != nil {
-            log.Println(err)
-            stream.Reset()
-            return
-        }
-
-        respStr := fmt.Sprintf("Added %s:%s",
-            reqInfo.ServiceName, string(putDataBytes))
+        respStr := fmt.Sprintf("Added %s:{%s, %s}",
+            reqInfo.ServiceName, reqInfo.ContentHash, reqInfo.DockerHash)
 
         log.Println("Add response: ", respStr)
         err = p2putil.WriteMsg(stream, []byte(respStr))
@@ -314,6 +294,22 @@ func handleAdd(etcdCli *clientv3.Client) func(network.Stream) {
             return
         }
     }
+}
+
+func etcdPut(etcdCli *clientv3.Client, serviceName, contentHash, dockerHash string) error {
+    putData := common.ServiceData{ContentHash: contentHash, DockerHash: dockerHash}
+    putDataBytes, err := json.Marshal(putData)
+    if err != nil {
+        return err
+    }
+
+    ctx := context.Background()
+    _, err = etcdCli.Put(ctx, serviceName, string(putDataBytes))
+    if err != nil {
+        return err
+    }
+
+    return nil
 }
 
 func handleGet(etcdCli *clientv3.Client) func(network.Stream) {
@@ -419,7 +415,7 @@ func etcdGet(etcdCli *clientv3.Client, query string, withPrefix bool) (
 
     queryOk = len(getResp.Kvs) > 0
     for _, kv := range getResp.Kvs {
-        var getData etcdData
+        var getData common.ServiceData
         err = json.Unmarshal(kv.Value, &getData)
         if err != nil {
             return serviceNames, contentHashes, dockerHashes, queryOk, err
