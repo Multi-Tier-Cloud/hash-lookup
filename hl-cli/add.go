@@ -50,10 +50,15 @@ type ImageConf struct {
 
 func addCmd() {
     addFlags := flag.NewFlagSet("add", flag.ExitOnError)
+    customProxyFlag := addFlags.String("custom-proxy", "",
+        "Provide a locally built proxy binary instead of building one from source.")
     proxyVersionFlag := addFlags.String("proxy-version", "",
         "Checkout specific version of proxy by supplying a commit hash. " +
         "By default, will use latest version checked into service-manager master. " +
         "This argument is supplied to git checkout <commit>, so a branch name or tags/<tag-name> works as well.")
+    proxyCmdFlag := addFlags.String("proxy-cmd", "",
+        "Use specified command to run proxy. ie. './proxy --configfile conf.json $PROXY_PORT'. " +
+        "Note the automatically generated proxy config file will be named 'conf.json'.")
     noAddFlag := addFlags.Bool("no-add", false,
         "Build image, but do not push to Dockerhub or add to hash-lookup")
 
@@ -98,7 +103,8 @@ func addCmd() {
     imageName := addFlags.Arg(2)
     serviceName := addFlags.Arg(3)
 
-    err := buildServiceImage(configFile, srcDir, imageName, serviceName, *proxyVersionFlag)
+    err := buildServiceImage(configFile, srcDir, imageName, serviceName,
+        *customProxyFlag, *proxyVersionFlag, *proxyCmdFlag)
     if err != nil {
         log.Fatalln(err)
     }
@@ -152,7 +158,7 @@ func addCmd() {
     fmt.Println("Response:", respStr)
 }
 
-func buildServiceImage(configFile, srcDir, imageName, serviceName, proxyVersion string) error {
+func buildServiceImage(configFile, srcDir, imageName, serviceName, customProxy, proxyVersion, proxyCmd string) error {
     configBytes, err := ioutil.ReadFile(configFile)
     if err != nil {
         return err
@@ -162,7 +168,7 @@ func buildServiceImage(configFile, srcDir, imageName, serviceName, proxyVersion 
         return err
     }
 
-    buildContext, err := createDockerBuildContext(config, srcDir, serviceName, proxyVersion)
+    buildContext, err := createDockerBuildContext(config, srcDir, serviceName, customProxy, proxyVersion, proxyCmd)
     if err != nil {
         return err
     }
@@ -183,14 +189,14 @@ func unmarshalImageConf(configBytes []byte) (config ImageConf, err error) {
     return config, nil
 }
 
-func createDockerBuildContext(config ImageConf, srcDir, serviceName, proxyVersion string) (
+func createDockerBuildContext(config ImageConf, srcDir, serviceName, customProxy, proxyVersion, proxyCmd string) (
     imageBuildContext *bytes.Buffer, err error) {
 
     imageBuildContext = new(bytes.Buffer)
     tw := tar.NewWriter(imageBuildContext)
     defer tw.Close()
 
-    dockerfileBytes := createDockerfile(config, serviceName)
+    dockerfileBytes := createDockerfile(config, serviceName, proxyCmd)
     dockerfileHdr := &tar.Header{
         Name: "Dockerfile",
         Mode: 0646,
@@ -223,11 +229,17 @@ func createDockerBuildContext(config ImageConf, srcDir, serviceName, proxyVersio
         return nil, err
     }
 
-    tmpDir, proxyPath, err := buildProxy(proxyVersion)
-    if err != nil {
-        return nil, err
+    var proxyPath string
+    if customProxy != "" {
+        proxyPath = customProxy
+    } else {
+        var tmpDir string
+        tmpDir, proxyPath, err = buildProxy(proxyVersion)
+        if err != nil {
+            return nil, err
+        }
+        defer os.RemoveAll(tmpDir)
     }
-    defer os.RemoveAll(tmpDir)
 
     err = tarAddFile(tw, proxyPath, "proxy")
     if err != nil {
@@ -255,7 +267,7 @@ ENV PROXY_IP=127.0.0.1
 ENV SERVICE_PORT=8080
 `
 
-func createDockerfile(config ImageConf, serviceName string) []byte {
+func createDockerfile(config ImageConf, serviceName, proxyCmd string) []byte {
     var dockerfile bytes.Buffer
     dockerfile.WriteString(dockerfileCore)
     for _, copyArgs := range config.DockerConf.Copy {
@@ -264,15 +276,20 @@ func createDockerfile(config ImageConf, serviceName string) []byte {
     for _, runCmd := range config.DockerConf.Run {
         dockerfile.WriteString(fmt.Sprintln("RUN", runCmd))
     }
-    if !config.DockerConf.ProxyClientMode {
-        dockerfile.WriteString(fmt.Sprintf(
+
+    var finalCmd string
+    if proxyCmd != "" {
+        finalCmd = fmt.Sprintf("CMD %s & %s\n", proxyCmd, config.DockerConf.Cmd)
+    } else if !config.DockerConf.ProxyClientMode {
+        finalCmd = fmt.Sprintf(
             "CMD ./proxy --configfile conf.json $PROXY_PORT %s $PROXY_IP:$SERVICE_PORT > proxy.log 2>&1 & %s\n",
-            serviceName, config.DockerConf.Cmd))
+            serviceName, config.DockerConf.Cmd)
     } else {
-        dockerfile.WriteString(fmt.Sprintf(
-            "CMD ./proxy --configfile conf.json $PROXY_PORT > proxy.log 2>&1 & %s\n",
-            config.DockerConf.Cmd))
+        finalCmd = fmt.Sprintf(
+            "CMD ./proxy --configfile conf.json $PROXY_PORT > proxy.log 2>&1 & %s\n", config.DockerConf.Cmd)
     }
+    dockerfile.WriteString(finalCmd)
+
     return dockerfile.Bytes()
 }
 

@@ -2,5 +2,6 @@ example/example
 example2/example2
 example3/example3
 hl-cli/hl-cli
-hl-cli/add-test-generated.tar
+hl-cli/add-test-build-context-default.tar
+hl-cli/add-test-build-context-custom-proxy.tar
 hl-service/hl-service

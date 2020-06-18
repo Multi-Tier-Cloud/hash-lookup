@@ -32,6 +32,8 @@ const (
     testServiceName string = "add-test-service"
 )
 
+var testCustomProxy string = filepath.Join(testDir, "custom-proxy")
+
 var testConfigFile string = filepath.Join(testDir, "image-conf.json")
 var testConfigClientFile string = filepath.Join(testDir, "image-conf-client.json")
 
@@ -62,12 +64,18 @@ func TestMain(m *testing.M) {
 
 func TestCreateDockerfile(t *testing.T) {
     t.Run("CreateDockerfile-default", func(t *testing.T) {
-        dockerfileBytes := createDockerfile(config, testServiceName)
+        dockerfileBytes := createDockerfile(config, testServiceName, "")
         fmt.Println(string(dockerfileBytes))
     })
 
     t.Run("CreateDockerfile-client", func(t *testing.T) {
-        dockerfileBytes := createDockerfile(configClient, testServiceName)
+        dockerfileBytes := createDockerfile(configClient, testServiceName, "")
+        fmt.Println(string(dockerfileBytes))
+    })
+
+    t.Run("CreateDockerfile-custom-psk-cmd", func(t *testing.T) {
+        dockerfileBytes := createDockerfile(configClient, testServiceName,
+            "./proxy --configfile conf.json --psk testPSK $PROXY_PORT %s $PROXY_IP:$SERVICE_PORT")
         fmt.Println(string(dockerfileBytes))
     })
 }
@@ -91,18 +99,31 @@ func TestBuildProxy(t *testing.T) {
 }
 
 func TestCreateDockerBuildContext(t *testing.T) {
-    buildContext, err := createDockerBuildContext(config, testDir, testServiceName, "")
-    if err != nil {
-        t.Errorf("%v", err)
-    }
-    err = ioutil.WriteFile("add-test-generated.tar", buildContext.Bytes(), 0666)
-    if err != nil {
-        t.Errorf("%v", err)
-    }
+    t.Run("CreateDockerBuildContext-default", func(t *testing.T) {
+        buildContext, err := createDockerBuildContext(config, testDir, testServiceName, "", "", "")
+        if err != nil {
+            t.Errorf("%v", err)
+        }
+        err = ioutil.WriteFile("add-test-build-context-default.tar", buildContext.Bytes(), 0666)
+        if err != nil {
+            t.Errorf("%v", err)
+        }
+    })
+
+    t.Run("CreateDockerBuildContext-custom-proxy", func(t *testing.T) {
+        buildContext, err := createDockerBuildContext(config, testDir, testServiceName, testCustomProxy, "", "")
+        if err != nil {
+            t.Errorf("%v", err)
+        }
+        err = ioutil.WriteFile("add-test-build-context-custom-proxy.tar", buildContext.Bytes(), 0666)
+        if err != nil {
+            t.Errorf("%v", err)
+        }
+    })
 }
 
 func TestBuildServiceImage(t *testing.T) {
-    err := buildServiceImage(testConfigFile, testDir,  testImageName, testServiceName, "")
+    err := buildServiceImage(testConfigFile, testDir,  testImageName, testServiceName, "", "", "")
     if err != nil {
         t.Errorf("%v", err)
     }
