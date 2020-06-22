@@ -28,17 +28,19 @@ import (
     "github.com/Multi-Tier-Cloud/hash-lookup/hl-common"
 )
 
-func AddHash(bootstraps []multiaddr.Multiaddr, psk pnet.PSK,
-        serviceName, hash, dockerId string) (
-        addResponse string, err error) {
+type ServiceInfo = common.ServiceInfo
 
-    reqBytes, err := marshalAddRequest(serviceName, hash, dockerId)
+// Add
+
+func AddHash(bootstraps []multiaddr.Multiaddr, psk pnet.PSK, serviceName string, info ServiceInfo) (
+    addResponse string, err error) {
+
+    reqBytes, err := marshalAddRequest(serviceName, info)
     if err != nil {
         return "", err
     }
 
-    response, err := common.SendRequest(bootstraps, psk,
-        common.AddProtocolID, reqBytes)
+    response, err := common.SendRequest(bootstraps, psk, common.AddProtocolID, reqBytes)
     if err != nil {
         return "", err
     }
@@ -47,12 +49,10 @@ func AddHash(bootstraps []multiaddr.Multiaddr, psk pnet.PSK,
 }
 
 func AddHashWithHostRouting(
-    ctx context.Context, host host.Host,
-    routingDiscovery *discovery.RoutingDiscovery,
-    serviceName, hash, dockerId string) (
-    addResponse string, err error) {
+    ctx context.Context, host host.Host, routingDiscovery *discovery.RoutingDiscovery,
+    serviceName string, info ServiceInfo) (addResponse string, err error) {
 
-    reqBytes, err := marshalAddRequest(serviceName, hash, dockerId)
+    reqBytes, err := marshalAddRequest(serviceName, info)
     if err != nil {
         return "", err
     }
@@ -66,103 +66,97 @@ func AddHashWithHostRouting(
     return string(data), nil
 }
 
-func marshalAddRequest(serviceName, hash, dockerId string) (
-    addRequest []byte, err error) {
-
-    reqInfo := common.AddRequest{serviceName, hash, dockerId}
+func marshalAddRequest(serviceName string, info ServiceInfo) (addRequest []byte, err error) {
+    reqInfo := common.AddRequest{Name: serviceName, Info: info}
     return json.Marshal(reqInfo)
 }
 
-func GetHash(bootstraps []multiaddr.Multiaddr, psk pnet.PSK, query string) (
-        contentHash, dockerHash string, err error) {
+// Get
 
-    response, err := common.SendRequest(bootstraps, psk,
-        common.GetProtocolID, []byte(query))
+func GetHash(bootstraps []multiaddr.Multiaddr, psk pnet.PSK, query string) (
+    info ServiceInfo, err error) {
+
+    response, err := common.SendRequest(bootstraps, psk, common.GetProtocolID, []byte(query))
     if err != nil {
-        return "", "", err
+        return info, err
     }
 
     return unmarshalGetResponse(response)
 }
 
 func GetHashWithHostRouting(
-    ctx context.Context, host host.Host,
-    routingDiscovery *discovery.RoutingDiscovery, query string) (
-    contentHash, dockerHash string, err error) {
+    ctx context.Context, host host.Host, routingDiscovery *discovery.RoutingDiscovery, query string) (
+    info ServiceInfo, err error) {
 
     response, err := common.SendRequestWithHostRouting(
         ctx, host, routingDiscovery, common.GetProtocolID, []byte(query))
     if err != nil {
-        return "", "", err
+        return info, err
     }
 
     return unmarshalGetResponse(response)
 }
 
-func unmarshalGetResponse(getResponse []byte) (
-    contentHash, dockerHash string, err error) {
-
+func unmarshalGetResponse(getResponse []byte) (info ServiceInfo, err error) {
     var respInfo common.GetResponse
     err = json.Unmarshal(getResponse, &respInfo)
     if err != nil {
-        return "", "", err
+        return info, err
     }
 
     if !respInfo.LookupOk {
-        return "", "", errors.New("hashlookup: Error finding hash")
+        return info, errors.New("hashlookup: Error finding hash")
     }
 
-    return respInfo.ContentHash, respInfo.DockerHash, nil
+    return respInfo.Info, nil
 }
 
-func ListHashes(bootstraps []multiaddr.Multiaddr, psk pnet.PSK) (
-    serviceNames, contentHashes, dockerHashes []string, err error) {
+// List
 
-    response, err := common.SendRequest(bootstraps, psk,
-        common.ListProtocolID, []byte{})
+func ListHashes(bootstraps []multiaddr.Multiaddr, psk pnet.PSK) (
+    nameToInfo map[string]ServiceInfo, err error) {
+
+    response, err := common.SendRequest(bootstraps, psk, common.ListProtocolID, []byte{})
     if err != nil {
-        return nil, nil, nil, err
+        return nameToInfo, err
     }
 
     return unmarshalListResponse(response)
 }
 
 func ListHashesWithHostRouting(
-    ctx context.Context, host host.Host,
-    routingDiscovery *discovery.RoutingDiscovery) (
-    serviceNames, contentHashes, dockerHashes []string, err error) {
+    ctx context.Context, host host.Host, routingDiscovery *discovery.RoutingDiscovery) (
+    nameToInfo map[string]ServiceInfo, err error) {
 
     response, err := common.SendRequestWithHostRouting(
         ctx, host, routingDiscovery, common.ListProtocolID, []byte{})
     if err != nil {
-        return nil, nil, nil, err
+        return nameToInfo, err
     }
 
     return unmarshalListResponse(response)
 }
 
-func unmarshalListResponse(listResponse []byte) (
-    serviceNames, contentHashes, dockerHashes []string, err error) {
-
+func unmarshalListResponse(listResponse []byte) (nameToInfo map[string]ServiceInfo, err error) {
     var respInfo common.ListResponse
     err = json.Unmarshal(listResponse, &respInfo)
     if err != nil {
-        return nil, nil, nil, err
+        return nameToInfo, err
     }
 
     if !respInfo.LookupOk {
-        return nil, nil, nil, errors.New("hashlookup: Error finding hash")
+        return nameToInfo, errors.New("hashlookup: Error finding hash")
     }
 
-    return respInfo.ServiceNames, respInfo.ContentHashes,
-        respInfo.DockerHashes, nil
+    return respInfo.NameToInfo, nil
 }
 
-func DeleteHash(bootstraps []multiaddr.Multiaddr, psk pnet.PSK,
-        serviceName string) (deleteResponse string, err error) {
+// Delete
 
-    response, err := common.SendRequest(bootstraps, psk,
-        common.DeleteProtocolID, []byte(serviceName))
+func DeleteHash(bootstraps []multiaddr.Multiaddr, psk pnet.PSK, serviceName string) (
+    deleteResponse string, err error) {
+
+    response, err := common.SendRequest(bootstraps, psk, common.DeleteProtocolID, []byte(serviceName))
     if err != nil {
         return "", err
     }
@@ -171,12 +165,11 @@ func DeleteHash(bootstraps []multiaddr.Multiaddr, psk pnet.PSK,
 }
 
 func DeleteHashWithHostRouting(
-    ctx context.Context, host host.Host,
-    routingDiscovery *discovery.RoutingDiscovery, serviceName string) (
+    ctx context.Context, host host.Host, routingDiscovery *discovery.RoutingDiscovery, serviceName string) (
     deleteResponse string, err error) {
 
-    response, err := common.SendRequestWithHostRouting(ctx, host,
-        routingDiscovery, common.DeleteProtocolID, []byte(serviceName))
+    response, err := common.SendRequestWithHostRouting(
+        ctx, host, routingDiscovery, common.DeleteProtocolID, []byte(serviceName))
     if err != nil {
         return "", err
     }

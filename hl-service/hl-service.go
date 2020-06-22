@@ -163,6 +163,7 @@ func main() {
 
     ctx := context.Background()
 
+    // etcd setup
     etcdClientEndpoint := *etcdIpFlag + ":" + strconv.Itoa(*etcdClientPortFlag)
     etcdPeerEndpoint := *etcdIpFlag + ":" + strconv.Itoa(*etcdPeerPortFlag)
 
@@ -217,11 +218,16 @@ func main() {
     // TODO: Remove this test entry at some point...
     //       Currently useful to serve as a negative test case when pulling images
     // BEGIN test entry
-    err = etcdPut(etcdCli, "hello-there", "general", "kenobi")
+    testEntry := common.ServiceInfo{
+        ContentHash: "general",
+        DockerHash: "kenobi",
+        AllocationReq: p2putil.PerfInd{RTT: 2187},
+    }
+    err = etcdPut(etcdCli, "hello-there", testEntry)
     if err != nil {
         panic(err)
     }
-    log.Println("Test entry: {hello-there: {general, kenobi}}")
+    log.Printf("Test entry: {hello-there: %v}\n", testEntry)
     // END test entry
 
     nodeConfig := p2pnode.NewConfig()
@@ -238,8 +244,7 @@ func main() {
     nodeConfig.HandlerProtocolIDs = append(nodeConfig.HandlerProtocolIDs,
         common.AddProtocolID, common.GetProtocolID, common.ListProtocolID,
         common.DeleteProtocolID, memberAddProtocolID)
-    nodeConfig.Rendezvous = append(nodeConfig.Rendezvous,
-        common.HashLookupRendezvousString)
+    nodeConfig.Rendezvous = append(nodeConfig.Rendezvous, common.HashLookupRendezvousString)
     node, err := p2pnode.NewNode(ctx, nodeConfig)
     if err != nil {
         if *localFlag && err.Error() == "Failed to connect to any bootstraps" {
@@ -277,15 +282,14 @@ func handleAdd(etcdCli *clientv3.Client) func(network.Stream) {
             return
         }
 
-        err = etcdPut(etcdCli, reqInfo.ServiceName, reqInfo.ContentHash, reqInfo.DockerHash)
+        err = etcdPut(etcdCli, reqInfo.Name, reqInfo.Info)
         if err != nil {
             log.Println(err)
             stream.Reset()
             return
         }
 
-        respStr := fmt.Sprintf("Added %s:{%s, %s}",
-            reqInfo.ServiceName, reqInfo.ContentHash, reqInfo.DockerHash)
+        respStr := fmt.Sprintf("Added {%s: %v}", reqInfo.Name, reqInfo.Info)
 
         log.Println("Add response: ", respStr)
         err = p2putil.WriteMsg(stream, []byte(respStr))
@@ -296,8 +300,7 @@ func handleAdd(etcdCli *clientv3.Client) func(network.Stream) {
     }
 }
 
-func etcdPut(etcdCli *clientv3.Client, serviceName, contentHash, dockerHash string) error {
-    putData := common.ServiceData{ContentHash: contentHash, DockerHash: dockerHash}
+func etcdPut(etcdCli *clientv3.Client, serviceName string, putData common.ServiceInfo) error {
     putDataBytes, err := json.Marshal(putData)
     if err != nil {
         return err
@@ -323,14 +326,14 @@ func handleGet(etcdCli *clientv3.Client) func(network.Stream) {
         reqStr := strings.TrimSpace(string(data))
         log.Println("Lookup request:", reqStr)
 
-        contentHash, dockerHash, ok, err := getServiceHash(etcdCli, reqStr)
+        info, ok, err := getServiceHash(etcdCli, reqStr)
         if err != nil {
             log.Println(err)
             stream.Reset()
             return
         }
 
-        respInfo := common.GetResponse{contentHash, dockerHash, ok}
+        respInfo := common.GetResponse{Info: info, LookupOk: ok}
         respBytes, err := json.Marshal(respInfo)
         if err != nil {
             log.Println(err)
@@ -352,16 +355,14 @@ func handleList(etcdCli *clientv3.Client) func(network.Stream) {
     return func(stream network.Stream) {
         log.Println("List request")
 
-        serviceNames, contentHashes, dockerHashes, ok, err :=
-            listServiceHashes(etcdCli)
+        nameToInfo, ok, err := listServiceHashes(etcdCli)
         if err != nil {
             log.Println(err)
             stream.Reset()
             return
         }
 
-        respInfo := common.ListResponse{
-            serviceNames, contentHashes, dockerHashes, ok}
+        respInfo := common.ListResponse{NameToInfo: nameToInfo, LookupOk: ok}
         respBytes, err := json.Marshal(respInfo)
         if err != nil {
             log.Println(err)
@@ -380,27 +381,29 @@ func handleList(etcdCli *clientv3.Client) func(network.Stream) {
 }
 
 func getServiceHash(etcdCli *clientv3.Client, query string) (
-    contentHash, dockerHash string, ok bool, err error) {
+    info common.ServiceInfo, queryOk bool, err error) {
 
-    _, contentHashes, dockerHashes, ok, err := etcdGet(etcdCli, query, false)
-    if len(contentHashes) > 0 {
-        contentHash = contentHashes[0]
+    nameToInfo, queryOk, err := etcdGet(etcdCli, query, false)
+    if err != nil {
+        return info, queryOk, err
     }
-    if len(dockerHashes) > 0 {
-        dockerHash = dockerHashes[0]
+
+    info, found := nameToInfo[query]
+    if !found {
+        return info, false, err
     }
-    return contentHash, dockerHash, ok, err
+
+    return info, queryOk, err
 }
 
 func listServiceHashes(etcdCli *clientv3.Client) (
-    serviceNames, contentHashes, dockerHashes []string, ok bool, err error) {
+    nameToInfo map[string]common.ServiceInfo, queryOk bool, err error) {
 
     return etcdGet(etcdCli, "", true)
 }
 
 func etcdGet(etcdCli *clientv3.Client, query string, withPrefix bool) (
-    serviceNames, contentHashes, dockerHashes []string, queryOk bool,
-    err error) {
+    nameToInfo map[string]common.ServiceInfo, queryOk bool, err error) {
 
     ctx := context.Background()
     var getResp *clientv3.GetResponse
@@ -410,22 +413,21 @@ func etcdGet(etcdCli *clientv3.Client, query string, withPrefix bool) (
         getResp, err = etcdCli.Get(ctx, query)
     }
     if err != nil {
-        return serviceNames, contentHashes, dockerHashes, queryOk, err
+        return nameToInfo, false, err
     }
 
+    nameToInfo = make(map[string]common.ServiceInfo)
     queryOk = len(getResp.Kvs) > 0
     for _, kv := range getResp.Kvs {
-        var getData common.ServiceData
+        var getData common.ServiceInfo
         err = json.Unmarshal(kv.Value, &getData)
         if err != nil {
-            return serviceNames, contentHashes, dockerHashes, queryOk, err
+            return nameToInfo, queryOk, err
         }
-        serviceNames = append(serviceNames, string(kv.Key))
-        contentHashes = append(contentHashes, getData.ContentHash)
-        dockerHashes = append(dockerHashes, getData.DockerHash)
+        nameToInfo[string(kv.Key)] = getData
     }
 
-    return serviceNames, contentHashes, dockerHashes, queryOk, nil
+    return nameToInfo, queryOk, nil
 }
 
 func handleDelete(etcdCli *clientv3.Client) func(network.Stream) {
@@ -449,8 +451,7 @@ func handleDelete(etcdCli *clientv3.Client) func(network.Stream) {
 
         var respStr string
         if deleteResp.Deleted != 0 {
-            respStr = fmt.Sprintf(
-                "Deleted %d entry from hash lookup", deleteResp.Deleted)
+            respStr = fmt.Sprintf("Deleted %d entry from hash lookup", deleteResp.Deleted)
         } else {
             respStr = "Error: Failed to delete any entries from hash lookup"
         }

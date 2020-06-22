@@ -33,16 +33,13 @@ func listCmd() {
     }
     defer node.Close()
 
-    serviceNames, contentHashes, dockerHashes, err :=
-        hashlookup.ListHashesWithHostRouting(
-        ctx, node.Host, node.RoutingDiscovery)
+    nameToInfo, err := hashlookup.ListHashesWithHostRouting(ctx, node.Host, node.RoutingDiscovery)
     if err != nil {
         log.Fatalln(err)
     }
 
     fmt.Println("Response:")
-    for i := 0; i < len(serviceNames); i++ {
-        fmt.Printf("Service Name: %s, Content Hash: %s, Docker Hash: %s\n",
-            serviceNames[i], contentHashes[i], dockerHashes[i])
+    for serviceName, info := range nameToInfo {
+        fmt.Printf("Service Name: %s, Info: %v\n", serviceName, info)
     }
 }

@@ -46,6 +46,8 @@ type ImageConf struct {
         Cmd string
         ProxyClientMode bool
     }
+
+    AlloctionReq p2putil.PerfInd
 }
 
 func addCmd() {
@@ -103,7 +105,16 @@ func addCmd() {
     imageName := addFlags.Arg(2)
     serviceName := addFlags.Arg(3)
 
-    err := buildServiceImage(configFile, srcDir, imageName, serviceName,
+    configBytes, err := ioutil.ReadFile(configFile)
+    if err != nil {
+        return err
+    }
+    config, err := unmarshalImageConf(configBytes)
+    if err != nil {
+        return err
+    }
+
+    err := buildServiceImage(config, srcDir, imageName, serviceName,
         *customProxyFlag, *proxyVersionFlag, *proxyCmdFlag)
     if err != nil {
         log.Fatalln(err)
@@ -149,8 +160,13 @@ func addCmd() {
     }
     defer node.Close()
 
+    info := hashlookup.ServiceInfo{
+        ContentHash: hash,
+        DockerHash: dockerId,
+        AllocationReq: config.AllocationReq,
+    }
     respStr, err := hashlookup.AddHashWithHostRouting(
-        ctx, node.Host, node.RoutingDiscovery, serviceName, hash, dockerId)
+        ctx, node.Host, node.RoutingDiscovery, serviceName, info)
     if err != nil {
         log.Fatalln(err)
     }
@@ -158,17 +174,19 @@ func addCmd() {
     fmt.Println("Response:", respStr)
 }
 
-func buildServiceImage(configFile, srcDir, imageName, serviceName, customProxy, proxyVersion, proxyCmd string) error {
-    configBytes, err := ioutil.ReadFile(configFile)
+func unmarshalImageConf(configBytes []byte) (config ImageConf, err error) {
+    err = json.Unmarshal(configBytes, &config)
     if err != nil {
-        return err
+        return config, err
     }
-    config, err := unmarshalImageConf(configBytes)
-    if err != nil {
-        return err
-    }
+    return config, nil
+}
 
-    buildContext, err := createDockerBuildContext(config, srcDir, serviceName, customProxy, proxyVersion, proxyCmd)
+func buildServiceImage(config ImageConf, srcDir, imageName, serviceName,
+    customProxy, proxyVersion, proxyCmd string) error {
+
+    buildContext, err := createDockerBuildContext(config, srcDir, serviceName,
+        customProxy, proxyVersion, proxyCmd)
     if err != nil {
         return err
     }
@@ -181,16 +199,8 @@ func buildServiceImage(configFile, srcDir, imageName, serviceName, customProxy, 
     return nil
 }
 
-func unmarshalImageConf(configBytes []byte) (config ImageConf, err error) {
-    err = json.Unmarshal(configBytes, &config)
-    if err != nil {
-        return config, err
-    }
-    return config, nil
-}
-
-func createDockerBuildContext(config ImageConf, srcDir, serviceName, customProxy, proxyVersion, proxyCmd string) (
-    imageBuildContext *bytes.Buffer, err error) {
+func createDockerBuildContext(config ImageConf, srcDir, serviceName,
+    customProxy, proxyVersion, proxyCmd string) (imageBuildContext *bytes.Buffer, err error) {
 
     imageBuildContext = new(bytes.Buffer)
     tw := tar.NewWriter(imageBuildContext)

@@ -43,29 +43,24 @@ const (
 )
 
 type AddRequest struct {
-    ServiceName string
-    ContentHash string
-    DockerHash string
+    Name string
+    Info ServiceInfo
 }
 
 type GetResponse struct {
-    ContentHash string
-    DockerHash string
+    Info ServiceInfo
     LookupOk bool
 }
 
 type ListResponse struct {
-    ServiceNames []string
-    ContentHashes []string
-    DockerHashes []string
+    NameToInfo map[string]ServiceInfo
     LookupOk bool
 }
 
-type ServiceData struct {
+type ServiceInfo struct {
     ContentHash string
     DockerHash string
-    SoftReq p2putil.PerfInd
-    HardReq p2putil.PerfInd
+    AllocationReq p2putil.PerfInd
 }
 
 func init() {
@@ -73,8 +68,8 @@ func init() {
     log.SetFlags(log.Ldate | log.Lmicroseconds | log.Lshortfile)
 }
 
-func SendRequest(bootstraps []multiaddr.Multiaddr, psk pnet.PSK,
-    protocolID protocol.ID, request []byte) (
+func SendRequest(
+    bootstraps []multiaddr.Multiaddr, psk pnet.PSK, protocolID protocol.ID, request []byte) (
     response []byte, err error) {
 
     ctx := context.Background()
@@ -87,14 +82,12 @@ func SendRequest(bootstraps []multiaddr.Multiaddr, psk pnet.PSK,
     }
     defer node.Close()
 
-    return SendRequestWithHostRouting(
-        ctx, node.Host, node.RoutingDiscovery, protocolID, request)
+    return SendRequestWithHostRouting(ctx, node.Host, node.RoutingDiscovery, protocolID, request)
 }
 
-func SendRequestWithHostRouting(ctx context.Context,
-    host host.Host, routingDiscovery *discovery.RoutingDiscovery,
-    protocolID protocol.ID, request []byte) (
-    response []byte, err error) {
+func SendRequestWithHostRouting(
+    ctx context.Context, host host.Host, routingDiscovery *discovery.RoutingDiscovery,
+    protocolID protocol.ID, request []byte) (response []byte, err error) {
 
     maxConnAttempts := 5
     for connAttempts := 0; connAttempts < maxConnAttempts; connAttempts++ {
@@ -110,8 +103,7 @@ func SendRequestWithHostRouting(ctx context.Context,
             log.Println()
         }
 
-        peerChan, err := routingDiscovery.FindPeers(
-            ctx, HashLookupRendezvousString)
+        peerChan, err := routingDiscovery.FindPeers(ctx, HashLookupRendezvousString)
         if err != nil {
             return nil, fmt.Errorf("ERROR: Unable to find peer with service ID %s\n%w",
                                     HashLookupRendezvousString, err)
@@ -143,6 +135,5 @@ func SendRequestWithHostRouting(ctx context.Context,
         }
     }
 
-    return nil, errors.New(
-        "hl-common: Failed to connect to any hash-lookup peers")
+    return nil, errors.New("hl-common: Failed to connect to any hash-lookup peers")
 }

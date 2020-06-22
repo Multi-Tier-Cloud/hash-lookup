@@ -61,11 +61,10 @@ func getCmd() {
     }
     defer node.Close()
 
-    contentHash, dockerHash, err := hashlookup.GetHashWithHostRouting(
+    info, err := hashlookup.GetHashWithHostRouting(
         ctx, node.Host, node.RoutingDiscovery, serviceName)
     if err != nil {
         log.Fatalln(err)
     }
-    fmt.Println(
-        "Response: Content Hash:", contentHash, ", Docker Hash:", dockerHash)
+    fmt.Println("Response:", info)
 }
