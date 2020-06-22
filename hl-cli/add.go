@@ -275,6 +275,8 @@ COPY conf.json .
 ENV PROXY_PORT=4201
 ENV PROXY_IP=127.0.0.1
 ENV SERVICE_PORT=8080
+ENV P2P_BOOTSTRAPS=
+ENV P2P_PSK=
 `
 
 func createDockerfile(config ImageConf, serviceName, proxyCmd string) []byte {
