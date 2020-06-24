@@ -36,10 +36,10 @@ import (
 const (
     HashLookupRendezvousString string = "hash-lookup"
 
-    AddProtocolID protocol.ID = "/add/1.0"
-    GetProtocolID protocol.ID = "/get/1.0"
-    ListProtocolID protocol.ID = "/list/1.0"
-    DeleteProtocolID protocol.ID = "/delete/1.0"
+    AddProtocolID protocol.ID = "/add/0.1"
+    GetProtocolID protocol.ID = "/get/0.1"
+    ListProtocolID protocol.ID = "/list/0.1"
+    DeleteProtocolID protocol.ID = "/delete/0.1"
 )
 
 type AddRequest struct {

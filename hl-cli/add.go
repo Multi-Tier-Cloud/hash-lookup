@@ -114,6 +114,8 @@ func addCmd() {
     if err != nil {
         log.Fatalln(err)
     }
+    // Remove given bootstraps
+    config.PerfConf.Bootstraps = nil
 
     err = buildServiceImage(config, srcDir, imageName, serviceName,
         *customProxyFlag, *proxyVersionFlag, *proxyCmdFlag)
