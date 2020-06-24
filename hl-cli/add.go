@@ -42,6 +42,7 @@ type ImageConf struct {
     PerfConf conf.Config
 
     DockerConf struct {
+        From string
         Copy [][2]string
         Run []string
         Cmd string
@@ -272,8 +273,7 @@ func createDockerBuildContext(config ImageConf, srcDir, serviceName,
 }
 
 const dockerfileCore string =
-`FROM ubuntu:16.04
-WORKDIR /app
+`WORKDIR /app
 COPY proxy .
 COPY conf.json .
 ENV PROXY_PORT=4201
@@ -285,10 +285,19 @@ ENV P2P_PSK=
 
 func createDockerfile(config ImageConf, serviceName, proxyCmd string) []byte {
     var dockerfile bytes.Buffer
+
+    fromBase := "ubuntu:16.04"
+    if config.DockerConf.From != "" {
+        fromBase = config.DockerConf.From
+    }
+    dockerfile.WriteString(fmt.Sprintln("FROM", fromBase))
+
     dockerfile.WriteString(dockerfileCore)
+
     for _, copyArgs := range config.DockerConf.Copy {
         dockerfile.WriteString(fmt.Sprintln("COPY", copyArgs[0], copyArgs[1]))
     }
+
     for _, runCmd := range config.DockerConf.Run {
         dockerfile.WriteString(fmt.Sprintln("RUN", runCmd))
     }
