@@ -67,5 +67,6 @@ func deleteCmd() {
         log.Fatalln(err)
     }
 
-    fmt.Println("Response:", respStr)
+    fmt.Println("Response:")
+    fmt.Println(respStr)
 }

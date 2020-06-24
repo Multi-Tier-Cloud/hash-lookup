@@ -31,6 +31,7 @@ import (
 
     "golang.org/x/crypto/ssh/terminal"
 
+    "github.com/Multi-Tier-Cloud/common/p2putil"
     "github.com/Multi-Tier-Cloud/common/util"
     driver "github.com/Multi-Tier-Cloud/docker-driver/docker_driver"
     "github.com/Multi-Tier-Cloud/hash-lookup/hashlookup"
@@ -47,7 +48,7 @@ type ImageConf struct {
         ProxyClientMode bool
     }
 
-    AlloctionReq p2putil.PerfInd
+    AllocationReq p2putil.PerfInd
 }
 
 func addCmd() {
@@ -107,14 +108,14 @@ func addCmd() {
 
     configBytes, err := ioutil.ReadFile(configFile)
     if err != nil {
-        return err
+        log.Fatalln(err)
     }
     config, err := unmarshalImageConf(configBytes)
     if err != nil {
-        return err
+        log.Fatalln(err)
     }
 
-    err := buildServiceImage(config, srcDir, imageName, serviceName,
+    err = buildServiceImage(config, srcDir, imageName, serviceName,
         *customProxyFlag, *proxyVersionFlag, *proxyCmdFlag)
     if err != nil {
         log.Fatalln(err)
@@ -171,7 +172,8 @@ func addCmd() {
         log.Fatalln(err)
     }
 
-    fmt.Println("Response:", respStr)
+    fmt.Println("Response:")
+    fmt.Println(respStr)
 }
 
 func unmarshalImageConf(configBytes []byte) (config ImageConf, err error) {

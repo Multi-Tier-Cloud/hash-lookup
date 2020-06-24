@@ -15,6 +15,7 @@
 package main
 
 import (
+    "encoding/json"
     "flag"
     "fmt"
     "log"
@@ -40,6 +41,10 @@ func listCmd() {
 
     fmt.Println("Response:")
     for serviceName, info := range nameToInfo {
-        fmt.Printf("Service Name: %s, Info: %v\n", serviceName, info)
+        infoBytes, err := json.Marshal(info)
+        if err != nil {
+            log.Fatalln(err)
+        }
+        fmt.Printf("Service Name: %s, Info: %s\n", serviceName, string(infoBytes))
     }
 }

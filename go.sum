@@ -24,6 +24,10 @@ github.com/Multi-Tier-Cloud/common v0.0.0-20200221061654-36f119e42422/go.mod h1:
 github.com/Multi-Tier-Cloud/common v0.0.0-20200309021533-0128c0bbff6d/go.mod h1:mYfgQ8NGzZk6T8yQJWkRxgoH/BTgytCYhmljAcIpc/g=
 github.com/Multi-Tier-Cloud/common v0.8.1 h1:6Bg+9CJHsARUiRS5d6QIurBEqs8hS048phUARCi1830=
 github.com/Multi-Tier-Cloud/common v0.8.1/go.mod h1:Ami9dJDjyI6O6JHytzHoctObdB4s6jxbXi8yCxjmz2c=
+github.com/Multi-Tier-Cloud/common v0.8.2 h1:DiD7I6ygfUlWLnWLiAcJxT48rBtSisQsxMD9IRZp2Xc=
+github.com/Multi-Tier-Cloud/common v0.8.2/go.mod h1:Ami9dJDjyI6O6JHytzHoctObdB4s6jxbXi8yCxjmz2c=
+github.com/Multi-Tier-Cloud/common v0.9.0 h1:0iYjL4OdTy+2vD1h6feVlvwchJyBj0Zie9QwpbpYd2g=
+github.com/Multi-Tier-Cloud/common v0.9.0/go.mod h1:X4dcy0HbJNKazhNRSVGQyvZ97jetSbRweI6W9K/iTb4=
 github.com/Multi-Tier-Cloud/docker-driver v0.0.0-20200323084307-72982cb10a89 h1:TC3YnPFo0RrI2L1BajZTJZyqgMvUoKUKqtmfoGkQv/Q=
 github.com/Multi-Tier-Cloud/docker-driver v0.0.0-20200323084307-72982cb10a89/go.mod h1:dwW1GHo7N7DFF4Ra6m1YH2P41LrC573oX16rnjIP2jM=
 github.com/Multi-Tier-Cloud/docker-driver v0.1.0/go.mod h1:HcQpH9PaHU8neSqmk5kD/oQjezwcgS7FxX/yIkPrKNY=

@@ -15,6 +15,7 @@
 package main
 
 import (
+    "encoding/json"
     "flag"
     "fmt"
     "log"
@@ -66,5 +67,11 @@ func getCmd() {
     if err != nil {
         log.Fatalln(err)
     }
-    fmt.Println("Response:", info)
+
+    infoBytes, err := json.Marshal(info)
+    if err != nil {
+        log.Fatalln(err)
+    }
+    fmt.Println("Response:")
+    fmt.Println(string(infoBytes))
 }

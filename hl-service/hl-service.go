@@ -221,7 +221,7 @@ func main() {
     testEntry := common.ServiceInfo{
         ContentHash: "general",
         DockerHash: "kenobi",
-        AllocationReq: p2putil.PerfInd{RTT: 2187},
+        AllocationReq: p2putil.PerfInd{RTT: 4962020},
     }
     err = etcdPut(etcdCli, "hello-there", testEntry)
     if err != nil {
