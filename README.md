@@ -10,7 +10,7 @@ common: Code reused throughout this project.
 
 ## Registry
 
-Provides 4 registry operations, add/get/list/delete, each with 2 function variants. Functions ending in *Hash create a temporary p2p node to communicate with Registry Service. Functions ending in *HashWithHostROuting take in an existing p2p node and routing discovery to perform the oepration without having to create that temporary p2p node. Note that ServiceInfo is defined in common package. For examples calling these functions, see registry-cli.
+Provides 4 registry operations, add/get/list/delete, each with 2 function variants. Functions ending in *Hash create a temporary p2p node to communicate with Registry Service. Functions ending in *HashWithHostRouting take in an existing p2p node and routing discovery to perform the oepration without having to create that temporary p2p node. Note that ServiceInfo is defined in common package. For examples calling these functions, see registry-cli.
 
 ```
 func AddHash(
@@ -84,7 +84,7 @@ Available commands are:
         Delete a microservice entry
 ```
 
-Add command
+### Add command
 ```
 add [<options>] <config> <dir> <image-name> <service-name>
 
@@ -99,6 +99,16 @@ add [<options>] <config> <dir> <image-name> <service-name>
 
 <service-name>
         Name of microservice to register with hash lookup
+
+<options>
+  -custom-proxy string
+        Provide a locally built proxy binary instead of building one from source.
+  -no-add
+        Build image, but do not push to Dockerhub or add to hash-lookup
+  -proxy-cmd string
+        Use specified command to run proxy. ie. './proxy --configfile conf.json $PROXY_PORT'. Note the automatically generated proxy config file will be named 'conf.json'.
+  -proxy-version string
+        Checkout specific version of proxy by supplying a commit hash. By default, will use latest version checked into service-manager master. This argument is supplied to git checkout <commit>, so a branch name or tags/<tag-name> works as well.
 ```
 
 Config is a json file of this format:
@@ -116,15 +126,15 @@ Config is a json file of this format:
     }
 
     "DockerConf": {
-        "From": string(base docker image)
+        "From": string(base docker image; defaults to ubuntu:16.04)
         "Copy": [
             [string(local src path), string(image dst path)]
         ]
         "Run": [
             string(command)
         ]
-        "Cmd": string(command)
-        "ProxyClientMode": bool(true for client mode, false for service mode)
+        "Cmd": string(command to run your microservice)
+        "ProxyClientMode": bool(true to run proxy in client mode, false for service mode)
     }
 
     "AllocationReq": {
@@ -132,8 +142,9 @@ Config is a json file of this format:
     }
 }
 ```
+PerfConf defines performance requirements passed to the proxy, used when the proxy selects microservices to connect to. DockerConf defines instructions for building the docker image for your microservice. They mostly translate to dockerfile directives. AllocationReq defines performance requirements needed to allocate a new instance of this microservice.
 
-Get command
+### Get command
 ```
 get [<options>] <name>
 
@@ -141,12 +152,12 @@ get [<options>] <name>
         Name of microservice to get hash of
 ```
 
-List command
+### List command
 ```
 list
 ```
 
-Delete command
+### Delete command
 ```
 get [<options>] <name>
 
