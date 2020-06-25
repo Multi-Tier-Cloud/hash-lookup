@@ -23,5 +23,8 @@
             "update-ca-certificates"
         ],
         "Cmd": "./covid19-db $PROXY_IP $SERVICE_PORT > db.log 2>&1"
+    },
+    "AllocationReq": {
+        "RTT": 2000
     }
 }

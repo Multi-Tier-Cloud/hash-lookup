@@ -123,7 +123,7 @@ func TestCreateDockerBuildContext(t *testing.T) {
 }
 
 func TestBuildServiceImage(t *testing.T) {
-    err := buildServiceImage(testConfigFile, testDir,  testImageName, testServiceName, "", "", "")
+    err := buildServiceImage(config, testDir,  testImageName, testServiceName, "", "", "")
     if err != nil {
         t.Errorf("%v", err)
     }
