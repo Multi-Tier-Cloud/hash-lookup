@@ -20,7 +20,7 @@ import (
     "log"
     "os"
 
-    "github.com/Multi-Tier-Cloud/hash-lookup/hashlookup"
+    "github.com/Multi-Tier-Cloud/hash-lookup/registry"
 )
 
 func deleteCmd() {
@@ -61,7 +61,7 @@ func deleteCmd() {
     }
     defer node.Close()
 
-    respStr, err := hashlookup.DeleteHashWithHostRouting(
+    respStr, err := registry.DeleteHashWithHostRouting(
         ctx, node.Host, node.RoutingDiscovery, serviceName)
     if err != nil {
         log.Fatalln(err)

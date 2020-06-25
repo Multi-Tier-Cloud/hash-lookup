@@ -20,7 +20,7 @@ import (
     "fmt"
     "log"
 
-    "github.com/Multi-Tier-Cloud/hash-lookup/hashlookup"
+    "github.com/Multi-Tier-Cloud/hash-lookup/registry"
 )
 
 func listCmd() {
@@ -34,7 +34,7 @@ func listCmd() {
     }
     defer node.Close()
 
-    nameToInfo, err := hashlookup.ListHashesWithHostRouting(ctx, node.Host, node.RoutingDiscovery)
+    nameToInfo, err := registry.ListHashesWithHostRouting(ctx, node.Host, node.RoutingDiscovery)
     if err != nil {
         log.Fatalln(err)
     }

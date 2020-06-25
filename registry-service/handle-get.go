@@ -16,7 +16,6 @@
 
  import (
     "encoding/json"
-    "fmt"
     "io/ioutil"
     "log"
     "strings"
@@ -25,10 +24,10 @@
 
     "go.etcd.io/etcd/clientv3"
 
-    "github.com/Multi-Tier-Cloud/hash-lookup/hl-common"
+    "github.com/Multi-Tier-Cloud/hash-lookup/common"
 )
 
-func handleAdd(etcdCli *clientv3.Client) func(network.Stream) {
+func handleGet(etcdCli *clientv3.Client) func(network.Stream) {
     return func(stream network.Stream) {
         data, err := ioutil.ReadAll(stream)
         if err != nil {
@@ -37,25 +36,24 @@ func handleAdd(etcdCli *clientv3.Client) func(network.Stream) {
         }
 
         reqStr := strings.TrimSpace(string(data))
-        log.Println("Add request:", reqStr)
+        log.Println("Lookup request:", reqStr)
 
-        var reqInfo common.AddRequest
-        err = json.Unmarshal([]byte(reqStr), &reqInfo)
+        info, ok, err := getServiceInfo(etcdCli, reqStr)
         if err != nil {
             streamError(stream, err)
             return
         }
 
-        err = etcdPut(etcdCli, reqInfo.Name, reqInfo.Info)
+        respInfo := common.GetResponse{Info: info, LookupOk: ok}
+        respBytes, err := json.Marshal(respInfo)
         if err != nil {
             streamError(stream, err)
             return
         }
 
-        respStr := fmt.Sprintf("Added {%s: %v}", reqInfo.Name, reqInfo.Info)
+        log.Println("Lookup response: ", string(respBytes))
 
-        log.Println("Add response:", respStr)
-        _, err = stream.Write([]byte(respStr))
+        _, err = stream.Write(respBytes)
         if err != nil {
             streamError(stream, err)
             return

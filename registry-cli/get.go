@@ -21,7 +21,7 @@ import (
     "log"
     "os"
 
-    "github.com/Multi-Tier-Cloud/hash-lookup/hashlookup"
+    "github.com/Multi-Tier-Cloud/hash-lookup/registry"
 )
 
 func getCmd() {
@@ -62,7 +62,7 @@ func getCmd() {
     }
     defer node.Close()
 
-    info, err := hashlookup.GetHashWithHostRouting(
+    info, err := registry.GetHashWithHostRouting(
         ctx, node.Host, node.RoutingDiscovery, serviceName)
     if err != nil {
         log.Fatalln(err)

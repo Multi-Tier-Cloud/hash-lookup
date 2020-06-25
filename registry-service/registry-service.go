@@ -84,7 +84,7 @@ import (
     "github.com/Multi-Tier-Cloud/common/p2pnode"
     "github.com/Multi-Tier-Cloud/common/p2putil"
     "github.com/Multi-Tier-Cloud/common/util"
-    "github.com/Multi-Tier-Cloud/hash-lookup/hl-common"
+    "github.com/Multi-Tier-Cloud/hash-lookup/common"
 
     "github.com/prometheus/client_golang/prometheus/promhttp"
 

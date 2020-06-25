@@ -1,7 +1,8 @@
 example/example
 example2/example2
 example3/example3
-hl-cli/hl-cli
-hl-cli/add-test-build-context-default.tar
-hl-cli/add-test-build-context-custom-proxy.tar
-hl-service/hl-service
+registry-cli/add-test-build-context-default.tar
+registry-cli/add-test-build-context-custom-proxy.tar
+registry-cli/registry-cli
+registry-service/registry-service
+

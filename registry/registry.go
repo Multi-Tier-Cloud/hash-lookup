@@ -12,7 +12,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package hashlookup
+package registry
 
 import (
     "context"
@@ -25,7 +25,7 @@ import (
 
     "github.com/multiformats/go-multiaddr"
 
-    "github.com/Multi-Tier-Cloud/hash-lookup/hl-common"
+    "github.com/Multi-Tier-Cloud/hash-lookup/common"
 )
 
 type ServiceInfo = common.ServiceInfo
