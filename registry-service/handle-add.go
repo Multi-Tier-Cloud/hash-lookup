@@ -46,13 +46,13 @@ func handleAdd(etcdCli *clientv3.Client) func(network.Stream) {
             return
         }
 
-        err = etcdPut(etcdCli, reqInfo.Name, reqInfo.Info)
+        err = etcdPut(etcdCli, reqInfo.Name, reqInfo.InfoStr)
         if err != nil {
             streamError(stream, err)
             return
         }
 
-        respStr := fmt.Sprintf("Added {%s: %v}", reqInfo.Name, reqInfo.Info)
+        respStr := fmt.Sprintf("Added {%s: %s}", reqInfo.Name, reqInfo.InfoStr)
 
         log.Println("Add response:", respStr)
         _, err = stream.Write([]byte(respStr))

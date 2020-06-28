@@ -38,13 +38,13 @@ func handleGet(etcdCli *clientv3.Client) func(network.Stream) {
         reqStr := strings.TrimSpace(string(data))
         log.Println("Lookup request:", reqStr)
 
-        info, ok, err := getServiceInfo(etcdCli, reqStr)
+        infoStr, ok, err := getServiceInfo(etcdCli, reqStr)
         if err != nil {
             streamError(stream, err)
             return
         }
 
-        respInfo := common.GetResponse{Info: info, LookupOk: ok}
+        respInfo := common.GetResponse{InfoStr: infoStr, LookupOk: ok}
         respBytes, err := json.Marshal(respInfo)
         if err != nil {
             streamError(stream, err)

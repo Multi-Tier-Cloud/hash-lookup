@@ -38,8 +38,11 @@ import (
     "github.com/Multi-Tier-Cloud/service-manager/conf"
 )
 
-type ImageConf struct {
-    PerfConf conf.Config
+type ServiceConf struct {
+    NetworkSoftReq p2putil.PerfInd
+    NetworkHardReq p2putil.PerfInd
+    CpuReq int
+    MemoryReq int
 
     DockerConf struct {
         From string
@@ -48,8 +51,6 @@ type ImageConf struct {
         Cmd string
         ProxyClientMode bool
     }
-
-    AllocationReq p2putil.PerfInd
 }
 
 func addCmd() {
@@ -111,12 +112,10 @@ func addCmd() {
     if err != nil {
         log.Fatalln(err)
     }
-    config, err := unmarshalImageConf(configBytes)
+    config, err := unmarshalServiceConf(configBytes)
     if err != nil {
         log.Fatalln(err)
     }
-    // Remove given bootstraps
-    config.PerfConf.Bootstraps = nil
 
     err = buildServiceImage(config, srcDir, imageName, serviceName,
         *customProxyFlag, *proxyVersionFlag, *proxyCmdFlag)
@@ -167,7 +166,10 @@ func addCmd() {
     info := registry.ServiceInfo{
         ContentHash: hash,
         DockerHash: dockerId,
-        AllocationReq: config.AllocationReq,
+        NetworkSoftReq: config.NetworkSoftReq,
+        NetworkHardReq: config.NetworkHardReq,
+        CpuReq: config.CpuReq,
+        MemoryReq: config.MemoryReq,
     }
     respStr, err := registry.AddHashWithHostRouting(
         ctx, node.Host, node.RoutingDiscovery, serviceName, info)
@@ -179,7 +181,7 @@ func addCmd() {
     fmt.Println(respStr)
 }
 
-func unmarshalImageConf(configBytes []byte) (config ImageConf, err error) {
+func unmarshalServiceConf(configBytes []byte) (config ServiceConf, err error) {
     err = json.Unmarshal(configBytes, &config)
     if err != nil {
         return config, err
@@ -187,7 +189,7 @@ func unmarshalImageConf(configBytes []byte) (config ImageConf, err error) {
     return config, nil
 }
 
-func buildServiceImage(config ImageConf, srcDir, imageName, serviceName,
+func buildServiceImage(config ServiceConf, srcDir, imageName, serviceName,
     customProxy, proxyVersion, proxyCmd string) error {
 
     buildContext, err := createDockerBuildContext(config, srcDir, serviceName,
@@ -204,7 +206,7 @@ func buildServiceImage(config ImageConf, srcDir, imageName, serviceName,
     return nil
 }
 
-func createDockerBuildContext(config ImageConf, srcDir, serviceName,
+func createDockerBuildContext(config ServiceConf, srcDir, serviceName,
     customProxy, proxyVersion, proxyCmd string) (imageBuildContext *bytes.Buffer, err error) {
 
     imageBuildContext = new(bytes.Buffer)
@@ -226,20 +228,29 @@ func createDockerBuildContext(config ImageConf, srcDir, serviceName,
         return nil, err
     }
 
-    perfconfBytes, err := json.Marshal(config.PerfConf)
+    proxyConfig := conf.Config{
+        Perf: struct{
+            SoftReq p2putil.PerfInd
+            HardReq p2putil.PerfInd
+        }{
+            SoftReq: config.NetworkSoftReq,
+            HardReq: config.NetworkHardReq,
+        },
+    }
+    confJsonBytes, err := json.Marshal(proxyConfig)
     if err != nil {
         return nil, err
     }
-    perfconfHdr := &tar.Header{
+    confJsonHdr := &tar.Header{
         Name: "conf.json",
         Mode: 0646,
-        Size: int64(len(perfconfBytes)),
+        Size: int64(len(confJsonBytes)),
     }
-    err = tw.WriteHeader(perfconfHdr)
+    err = tw.WriteHeader(confJsonHdr)
     if err != nil {
         return nil, err
     }
-    _, err = tw.Write(perfconfBytes)
+    _, err = tw.Write(confJsonBytes)
     if err != nil {
         return nil, err
     }
@@ -283,7 +294,7 @@ ENV P2P_BOOTSTRAPS=
 ENV P2P_PSK=
 `
 
-func createDockerfile(config ImageConf, serviceName, proxyCmd string) []byte {
+func createDockerfile(config ServiceConf, serviceName, proxyCmd string) []byte {
     var dockerfile bytes.Buffer
 
     fromBase := "ubuntu:16.04"
@@ -315,7 +326,10 @@ func createDockerfile(config ImageConf, serviceName, proxyCmd string) []byte {
     }
     dockerfile.WriteString(finalCmd)
 
-    return dockerfile.Bytes()
+    dockerfileBytes := dockerfile.Bytes()
+    fmt.Printf("Dockerfile for %s:\n", serviceName)
+    fmt.Println(string(dockerfileBytes))
+    return dockerfileBytes
 }
 
 func buildProxy(version string) (tmpDir, proxyPath string, err error) {

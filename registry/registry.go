@@ -25,10 +25,18 @@ import (
 
     "github.com/multiformats/go-multiaddr"
 
+    "github.com/Multi-Tier-Cloud/common/p2putil"
     "github.com/Multi-Tier-Cloud/hash-lookup/common"
 )
 
-type ServiceInfo = common.ServiceInfo
+type ServiceInfo struct {
+    ContentHash string
+    DockerHash string
+    NetworkSoftReq p2putil.PerfInd
+    NetworkHardReq p2putil.PerfInd
+    CpuReq int
+    MemoryReq int
+}
 
 // Add
 
@@ -67,7 +75,11 @@ func AddHashWithHostRouting(
 }
 
 func marshalAddRequest(serviceName string, info ServiceInfo) (addRequest []byte, err error) {
-    reqInfo := common.AddRequest{Name: serviceName, Info: info}
+    infoBytes, err := json.Marshal(info)
+    if err != nil {
+        return nil, err
+    }
+    reqInfo := common.AddRequest{Name: serviceName, InfoStr: string(infoBytes)}
     return json.Marshal(reqInfo)
 }
 
@@ -105,10 +117,15 @@ func unmarshalGetResponse(getResponse []byte) (info ServiceInfo, err error) {
     }
 
     if !respInfo.LookupOk {
-        return info, errors.New("hashlookup: Error finding hash")
+        return info, errors.New("registry: Error finding service info")
     }
 
-    return respInfo.Info, nil
+    err = json.Unmarshal([]byte(respInfo.InfoStr), &info)
+    if err != nil {
+        return info, err
+    }
+
+    return info, nil
 }
 
 // List
@@ -118,7 +135,7 @@ func ListHashes(bootstraps []multiaddr.Multiaddr, psk pnet.PSK) (
 
     response, err := common.SendRequest(bootstraps, psk, common.ListProtocolID, []byte{})
     if err != nil {
-        return nameToInfo, err
+        return nil, err
     }
 
     return unmarshalListResponse(response)
@@ -131,7 +148,7 @@ func ListHashesWithHostRouting(
     response, err := common.SendRequestWithHostRouting(
         ctx, host, routingDiscovery, common.ListProtocolID, []byte{})
     if err != nil {
-        return nameToInfo, err
+        return nil, err
     }
 
     return unmarshalListResponse(response)
@@ -141,14 +158,24 @@ func unmarshalListResponse(listResponse []byte) (nameToInfo map[string]ServiceIn
     var respInfo common.ListResponse
     err = json.Unmarshal(listResponse, &respInfo)
     if err != nil {
-        return nameToInfo, err
+        return nil, err
     }
 
     if !respInfo.LookupOk {
-        return nameToInfo, errors.New("hashlookup: Error finding hash")
+        return nil, errors.New("registry: Error finding service info")
     }
 
-    return respInfo.NameToInfo, nil
+    nameToInfo = make(map[string]ServiceInfo)
+    for serviceName, infoStr := range respInfo.NameToInfoStr {
+        var info ServiceInfo
+        err = json.Unmarshal([]byte(infoStr), &info)
+        if err != nil {
+            return nil, err
+        }
+        nameToInfo[serviceName] = info
+    }
+
+    return nameToInfo, nil
 }
 
 // Delete

@@ -19,7 +19,6 @@ package main
 // In case "go" is not in sudo path
 
 import (
-    "fmt"
     "io/ioutil"
     "os"
     "path/filepath"
@@ -34,18 +33,18 @@ const (
 
 var testCustomProxy string = filepath.Join(testDir, "custom-proxy")
 
-var testConfigFile string = filepath.Join(testDir, "image-conf.json")
-var testConfigClientFile string = filepath.Join(testDir, "image-conf-client.json")
+var testConfigFile string = filepath.Join(testDir, "service-conf.json")
+var testConfigClientFile string = filepath.Join(testDir, "service-conf-client.json")
 
-var config ImageConf
-var configClient ImageConf
+var config ServiceConf
+var configClient ServiceConf
 
 func TestMain(m *testing.M) {
     configBytes, err := ioutil.ReadFile(testConfigFile)
     if err != nil {
         panic(err)
     }
-    config, err = unmarshalImageConf(configBytes)
+    config, err = unmarshalServiceConf(configBytes)
     if err != nil {
         panic(err)
     }
@@ -54,7 +53,7 @@ func TestMain(m *testing.M) {
     if err != nil {
         panic(err)
     }
-    configClient, err = unmarshalImageConf(configClientBytes)
+    configClient, err = unmarshalServiceConf(configClientBytes)
     if err != nil {
         panic(err)
     }
@@ -64,19 +63,16 @@ func TestMain(m *testing.M) {
 
 func TestCreateDockerfile(t *testing.T) {
     t.Run("CreateDockerfile-default", func(t *testing.T) {
-        dockerfileBytes := createDockerfile(config, testServiceName, "")
-        fmt.Println(string(dockerfileBytes))
+        _ := createDockerfile(config, testServiceName, "")
     })
 
     t.Run("CreateDockerfile-client", func(t *testing.T) {
-        dockerfileBytes := createDockerfile(configClient, testServiceName, "")
-        fmt.Println(string(dockerfileBytes))
+        _ := createDockerfile(configClient, testServiceName, "")
     })
 
     t.Run("CreateDockerfile-custom-psk-cmd", func(t *testing.T) {
-        dockerfileBytes := createDockerfile(configClient, testServiceName,
+        _ := createDockerfile(configClient, testServiceName,
             "./proxy --configfile conf.json --psk testPSK $PROXY_PORT %s $PROXY_IP:$SERVICE_PORT")
-        fmt.Println(string(dockerfileBytes))
     })
 }
 

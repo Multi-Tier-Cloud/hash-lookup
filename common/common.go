@@ -42,25 +42,28 @@ const (
     DeleteProtocolID protocol.ID = "/delete/0.1"
 )
 
+// Info field in the following structs should be a json encoding of
+// registry.ServiceInfo. Just store this string instead of decoding it so we
+// don't need to keep updating registry-service. Encoding/decoding is already
+// being done on client-side (registry package and registry-cli).
+// Ie. if we add a new field to ServiceInfo and send it as json, the existing
+// registry-service instances will store this string, as opposed to having them
+// decode the info field into their outdated version of the ServiceInfo struct,
+// since they would not contain the new field.
+
 type AddRequest struct {
     Name string
-    Info ServiceInfo
+    InfoStr string
 }
 
 type GetResponse struct {
-    Info ServiceInfo
+    InfoStr string
     LookupOk bool
 }
 
 type ListResponse struct {
-    NameToInfo map[string]ServiceInfo
+    NameToInfoStr map[string]string
     LookupOk bool
-}
-
-type ServiceInfo struct {
-    ContentHash string
-    DockerHash string
-    AllocationReq p2putil.PerfInd
 }
 
 func init() {

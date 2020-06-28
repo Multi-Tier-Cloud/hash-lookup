@@ -1,14 +1,13 @@
 {
-    "PerfConf": {
-        "Perf": {
-            "SoftReq": {
-                "RTT": 100
-            },
-            "HardReq": {
-                "RTT": 1000
-            }
-        }
+    "NetworkSoftReq": {
+        "RTT": 100
     },
+    "NetworkHardReq": {
+        "RTT": 100
+    },
+    "CpuReq": 20,
+    "MemoryReq": 1000,
+
     "DockerConf": {
         "Copy": [
             ["covid19-db", "."],
@@ -20,8 +19,5 @@
         ],
         "Cmd": "./covid19-db $PROXY_IP $SERVICE_PORT > db.log 2>&1",
         "ProxyClientMode": true
-    },
-    "AllocationReq": {
-        "RTT": 2000
     }
 }

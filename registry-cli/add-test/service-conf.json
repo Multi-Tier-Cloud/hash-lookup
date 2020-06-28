@@ -1,0 +1,22 @@
+{
+    "NetworkSoftReq": {
+        "RTT": 100
+    },
+    "NetworkHardReq": {
+        "RTT": 100
+    },
+    "CpuReq": 20,
+    "MemoryReq": 1000,
+
+    "DockerConf": {
+        "Copy": [
+            ["covid19-db", "."],
+            ["digicert_github.crt", "/usr/local/share/ca-certificates/digicert_github.crt"]
+        ],
+        "Run": [
+            "apt-get update && apt-get install -y ca-certificates",
+            "update-ca-certificates"
+        ],
+        "Cmd": "./covid19-db $PROXY_IP $SERVICE_PORT > db.log 2>&1"
+    }
+}

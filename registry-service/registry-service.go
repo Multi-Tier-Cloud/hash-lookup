@@ -85,6 +85,7 @@ import (
     "github.com/Multi-Tier-Cloud/common/p2putil"
     "github.com/Multi-Tier-Cloud/common/util"
     "github.com/Multi-Tier-Cloud/hash-lookup/common"
+    "github.com/Multi-Tier-Cloud/hash-lookup/registry"
 
     "github.com/prometheus/client_golang/prometheus/promhttp"
 
@@ -179,7 +180,7 @@ func main() {
         initialCluster, err = sendMemberAddRequest(
             etcdName, etcdPeerUrl, *localFlag, *bootstraps, *psk)
         if err != nil {
-            panic(err)
+            log.Fatalln(err)
         }
         clusterState = "existing"
     }
@@ -201,7 +202,7 @@ func main() {
     go func() {
         err := cmd.Run()
         if err != nil {
-            panic(err)
+            log.Fatalln(err)
         }
     }()
 
@@ -210,23 +211,30 @@ func main() {
         DialTimeout: 5 * time.Second,
     })
     if err != nil {
-        panic(err)
+        log.Fatalln(err)
     }
     defer etcdCli.Close()
 
     // TODO: Remove this test entry at some point...
     //       Currently useful to serve as a negative test case when pulling images
     // BEGIN test entry
-    testEntry := common.ServiceInfo{
-        ContentHash: "general",
-        DockerHash: "kenobi",
-        AllocationReq: p2putil.PerfInd{RTT: 4962020},
+    testEntry := registry.ServiceInfo{
+        ContentHash: "UofT",
+        DockerHash: "ECE",
+        NetworkSoftReq: p2putil.PerfInd{RTT: 2019},
+        NetworkHardReq: p2putil.PerfInd{RTT: 2020},
+        CpuReq: 50,
+        MemoryReq: 496,
     }
-    err = etcdPut(etcdCli, "hello-there", testEntry)
+    testEntryBytes, err := json.Marshal(testEntry)
     if err != nil {
-        panic(err)
+        log.Fatalln(err)
     }
-    log.Printf("Test entry: {hello-there: %v}\n", testEntry)
+    err = etcdPut(etcdCli, "test-entry", string(testEntryBytes))
+    if err != nil {
+        log.Fatalln(err)
+    }
+    log.Printf("Test entry: {test-entry: %v}\n", testEntry)
     // END test entry
 
     nodeConfig := p2pnode.NewConfig()
@@ -249,7 +257,7 @@ func main() {
         if *localFlag && err.Error() == "Failed to connect to any bootstraps" {
             log.Println("Local run, not connecting to bootstraps")
         } else {
-            panic(err)
+            log.Fatalln(err)
         }
     }
     defer node.Close()
@@ -267,14 +275,9 @@ func streamError(stream network.Stream, err error) {
     stream.Reset()
 }
 
-func etcdPut(etcdCli *clientv3.Client, serviceName string, putData common.ServiceInfo) error {
-    putDataBytes, err := json.Marshal(putData)
-    if err != nil {
-        return err
-    }
-
+func etcdPut(etcdCli *clientv3.Client, serviceName string, putData string) (err error) {
     ctx := context.Background()
-    _, err = etcdCli.Put(ctx, serviceName, string(putDataBytes))
+    _, err = etcdCli.Put(ctx, serviceName, putData)
     if err != nil {
         return err
     }
@@ -283,29 +286,29 @@ func etcdPut(etcdCli *clientv3.Client, serviceName string, putData common.Servic
 }
 
 func getServiceInfo(etcdCli *clientv3.Client, query string) (
-    info common.ServiceInfo, queryOk bool, err error) {
+    infoStr string, queryOk bool, err error) {
 
-    nameToInfo, queryOk, err := etcdGet(etcdCli, query, false)
+    nameToInfoStr, queryOk, err := etcdGet(etcdCli, query, false)
     if err != nil {
-        return info, queryOk, err
+        return infoStr, queryOk, err
     }
 
-    info, found := nameToInfo[query]
+    infoStr, found := nameToInfoStr[query]
     if !found {
-        return info, false, err
+        return infoStr, false, err
     }
 
-    return info, queryOk, err
+    return infoStr, queryOk, err
 }
 
 func listServiceInfo(etcdCli *clientv3.Client) (
-    nameToInfo map[string]common.ServiceInfo, queryOk bool, err error) {
+    nameToInfoStr map[string]string, queryOk bool, err error) {
 
     return etcdGet(etcdCli, "", true)
 }
 
 func etcdGet(etcdCli *clientv3.Client, query string, withPrefix bool) (
-    nameToInfo map[string]common.ServiceInfo, queryOk bool, err error) {
+    nameToInfoStr map[string]string, queryOk bool, err error) {
 
     ctx := context.Background()
     var getResp *clientv3.GetResponse
@@ -315,19 +318,14 @@ func etcdGet(etcdCli *clientv3.Client, query string, withPrefix bool) (
         getResp, err = etcdCli.Get(ctx, query)
     }
     if err != nil {
-        return nameToInfo, false, err
+        return nameToInfoStr, false, err
     }
 
-    nameToInfo = make(map[string]common.ServiceInfo)
+    nameToInfoStr = make(map[string]string)
     queryOk = len(getResp.Kvs) > 0
     for _, kv := range getResp.Kvs {
-        var getData common.ServiceInfo
-        err = json.Unmarshal(kv.Value, &getData)
-        if err != nil {
-            return nameToInfo, queryOk, err
-        }
-        nameToInfo[string(kv.Key)] = getData
+        nameToInfoStr[string(kv.Key)] = string(kv.Value)
     }
 
-    return nameToInfo, queryOk, nil
+    return nameToInfoStr, queryOk, nil
 }

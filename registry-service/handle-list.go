@@ -29,13 +29,13 @@ func handleList(etcdCli *clientv3.Client) func(network.Stream) {
     return func(stream network.Stream) {
         log.Println("List request")
 
-        nameToInfo, ok, err := listServiceInfo(etcdCli)
+        nameToInfoStr, ok, err := listServiceInfo(etcdCli)
         if err != nil {
             streamError(stream, err)
             return
         }
 
-        respInfo := common.ListResponse{NameToInfo: nameToInfo, LookupOk: ok}
+        respInfo := common.ListResponse{NameToInfoStr: nameToInfoStr, LookupOk: ok}
         respBytes, err := json.Marshal(respInfo)
         if err != nil {
             streamError(stream, err)
