@@ -15,12 +15,13 @@
 package main
 
 import (
+    "encoding/json"
     "flag"
     "fmt"
     "log"
     "os"
 
-    "github.com/Multi-Tier-Cloud/hash-lookup/hashlookup"
+    "github.com/Multi-Tier-Cloud/service-registry/registry"
 )
 
 func getCmd() {
@@ -28,13 +29,14 @@ func getCmd() {
 
     getUsage := func() {
         exeName := getExeName()
-        fmt.Fprintln(os.Stderr, "Usage:", exeName, "get [<options>] <name>")
+        fmt.Fprintf(os.Stderr, "Usage of %s get:\n", exeName)
+        fmt.Fprintf(os.Stderr, "$ %s get [OPTIONS ...] <service-name>\n", exeName)
         fmt.Fprintln(os.Stderr,
 `
-<name>
+<service-name>
         Name of microservice to get hash of
 
-<options>`)
+OPTIONS:`)
         getFlags.PrintDefaults()
     }
     
@@ -61,11 +63,16 @@ func getCmd() {
     }
     defer node.Close()
 
-    contentHash, dockerHash, err := hashlookup.GetHashWithHostRouting(
+    info, err := registry.GetServiceWithHostRouting(
         ctx, node.Host, node.RoutingDiscovery, serviceName)
     if err != nil {
         log.Fatalln(err)
     }
-    fmt.Println(
-        "Response: Content Hash:", contentHash, ", Docker Hash:", dockerHash)
+
+    infoBytes, err := json.Marshal(info)
+    if err != nil {
+        log.Fatalln(err)
+    }
+    fmt.Println("Response:")
+    fmt.Println(string(infoBytes))
 }

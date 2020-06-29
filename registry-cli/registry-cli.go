@@ -40,7 +40,7 @@ var (
     commands = []commandData{
         commandData{
             "add",
-            "Hash a microservice and add it to the hash-lookup service",
+            "Hash a microservice and add it to the registry-service",
             addCmd,
         },
         commandData{
@@ -50,7 +50,7 @@ var (
         },
         commandData{
             "list",
-            "List all microservices and data stored by the hash-lookup service",
+            "List all microservices and data stored by the registry-service",
             listCmd,
         },
         commandData{
@@ -133,8 +133,7 @@ func main() {
 func usage() {
     exeName := getExeName()
     fmt.Fprintf(os.Stderr, "Usage of %s:\n", exeName)
-    fmt.Fprintf(os.Stderr,
-        "$ %s [OPTIONS ...] <command>\n", exeName)
+    fmt.Fprintf(os.Stderr, "$ %s [OPTIONS ...] <command>\n", exeName)
 
     // NOTE: Bootstrap is technically *mandatory* right now, not optional,
     //       at least until we can get a fallback working (TODO).

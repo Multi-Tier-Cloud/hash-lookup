@@ -34,38 +34,36 @@ import (
 )
 
 const (
-    HashLookupRendezvousString string = "hash-lookup"
+    RegistryServiceRendezvousString string = "registry-service"
 
-    AddProtocolID protocol.ID = "/add/1.0"
-    GetProtocolID protocol.ID = "/get/1.0"
-    ListProtocolID protocol.ID = "/list/1.0"
-    DeleteProtocolID protocol.ID = "/delete/1.0"
+    AddProtocolID protocol.ID = "/add/0.1"
+    GetProtocolID protocol.ID = "/get/0.1"
+    ListProtocolID protocol.ID = "/list/0.1"
+    DeleteProtocolID protocol.ID = "/delete/0.1"
 )
 
+// Info field in the following structs should be a json encoding of
+// registry.ServiceInfo. Just store this string instead of decoding it so we
+// don't need to keep updating registry-service. Encoding/decoding is already
+// being done on client-side (registry package and registry-cli).
+// Ie. if we add a new field to ServiceInfo and send it as json, the existing
+// registry-service instances will store this string, as opposed to having them
+// decode the info field into their outdated version of the ServiceInfo struct,
+// since they would not contain the new field.
+
 type AddRequest struct {
-    ServiceName string
-    ContentHash string
-    DockerHash string
+    Name string
+    InfoStr string
 }
 
 type GetResponse struct {
-    ContentHash string
-    DockerHash string
+    InfoStr string
     LookupOk bool
 }
 
 type ListResponse struct {
-    ServiceNames []string
-    ContentHashes []string
-    DockerHashes []string
+    NameToInfoStr map[string]string
     LookupOk bool
-}
-
-type ServiceData struct {
-    ContentHash string
-    DockerHash string
-    SoftReq p2putil.PerfInd
-    HardReq p2putil.PerfInd
 }
 
 func init() {
@@ -73,8 +71,8 @@ func init() {
     log.SetFlags(log.Ldate | log.Lmicroseconds | log.Lshortfile)
 }
 
-func SendRequest(bootstraps []multiaddr.Multiaddr, psk pnet.PSK,
-    protocolID protocol.ID, request []byte) (
+func SendRequest(
+    bootstraps []multiaddr.Multiaddr, psk pnet.PSK, protocolID protocol.ID, request []byte) (
     response []byte, err error) {
 
     ctx := context.Background()
@@ -87,14 +85,12 @@ func SendRequest(bootstraps []multiaddr.Multiaddr, psk pnet.PSK,
     }
     defer node.Close()
 
-    return SendRequestWithHostRouting(
-        ctx, node.Host, node.RoutingDiscovery, protocolID, request)
+    return SendRequestWithHostRouting(ctx, node.Host, node.RoutingDiscovery, protocolID, request)
 }
 
-func SendRequestWithHostRouting(ctx context.Context,
-    host host.Host, routingDiscovery *discovery.RoutingDiscovery,
-    protocolID protocol.ID, request []byte) (
-    response []byte, err error) {
+func SendRequestWithHostRouting(
+    ctx context.Context, host host.Host, routingDiscovery *discovery.RoutingDiscovery,
+    protocolID protocol.ID, request []byte) (response []byte, err error) {
 
     maxConnAttempts := 5
     for connAttempts := 0; connAttempts < maxConnAttempts; connAttempts++ {
@@ -110,11 +106,10 @@ func SendRequestWithHostRouting(ctx context.Context,
             log.Println()
         }
 
-        peerChan, err := routingDiscovery.FindPeers(
-            ctx, HashLookupRendezvousString)
+        peerChan, err := routingDiscovery.FindPeers(ctx, RegistryServiceRendezvousString)
         if err != nil {
             return nil, fmt.Errorf("ERROR: Unable to find peer with service ID %s\n%w",
-                                    HashLookupRendezvousString, err)
+                                    RegistryServiceRendezvousString, err)
         }
 
         for peer := range peerChan {
@@ -143,6 +138,5 @@ func SendRequestWithHostRouting(ctx context.Context,
         }
     }
 
-    return nil, errors.New(
-        "hl-common: Failed to connect to any hash-lookup peers")
+    return nil, errors.New("registry: Failed to connect to any registry-service peers")
 }

@@ -15,16 +15,29 @@
 package main
 
 import (
+    "encoding/json"
     "flag"
     "fmt"
     "log"
+    "os"
 
-    "github.com/Multi-Tier-Cloud/hash-lookup/hashlookup"
+    "github.com/Multi-Tier-Cloud/service-registry/registry"
 )
 
 func listCmd() {
     listFlags := flag.NewFlagSet("list", flag.ExitOnError)
 
+    listUsage := func() {
+        exeName := getExeName()
+        fmt.Fprintf(os.Stderr, "Usage of %s list:\n", exeName)
+        fmt.Fprintf(os.Stderr, "$ %s list [OPTIONS ...]\n", exeName)
+        fmt.Fprintln(os.Stderr,
+`
+OPTIONS:`)
+        listFlags.PrintDefaults()
+    }
+    
+    listFlags.Usage = listUsage
     listFlags.Parse(flag.Args()[1:])
 
     ctx, node, err := setupNode(*bootstraps, *psk)
@@ -33,16 +46,17 @@ func listCmd() {
     }
     defer node.Close()
 
-    serviceNames, contentHashes, dockerHashes, err :=
-        hashlookup.ListHashesWithHostRouting(
-        ctx, node.Host, node.RoutingDiscovery)
+    nameToInfo, err := registry.ListServicesWithHostRouting(ctx, node.Host, node.RoutingDiscovery)
     if err != nil {
         log.Fatalln(err)
     }
 
     fmt.Println("Response:")
-    for i := 0; i < len(serviceNames); i++ {
-        fmt.Printf("Service Name: %s, Content Hash: %s, Docker Hash: %s\n",
-            serviceNames[i], contentHashes[i], dockerHashes[i])
+    for serviceName, info := range nameToInfo {
+        infoBytes, err := json.Marshal(info)
+        if err != nil {
+            log.Fatalln(err)
+        }
+        fmt.Printf("Service Name: %s, Info: %s\n", serviceName, string(infoBytes))
     }
 }

@@ -70,12 +70,11 @@ import (
     "flag"
     "fmt"
     "log"
+    "net/http"
     "os"
     "os/exec"
     "strconv"
-    "strings"
     "time"
-    "net/http"
 
     "github.com/libp2p/go-libp2p-core/network"
     "github.com/libp2p/go-libp2p-core/pnet"
@@ -85,7 +84,8 @@ import (
     "github.com/Multi-Tier-Cloud/common/p2pnode"
     "github.com/Multi-Tier-Cloud/common/p2putil"
     "github.com/Multi-Tier-Cloud/common/util"
-    "github.com/Multi-Tier-Cloud/hash-lookup/hl-common"
+    "github.com/Multi-Tier-Cloud/service-registry/common"
+    "github.com/Multi-Tier-Cloud/service-registry/registry"
 
     "github.com/prometheus/client_golang/prometheus/promhttp"
 
@@ -163,6 +163,7 @@ func main() {
 
     ctx := context.Background()
 
+    // etcd setup
     etcdClientEndpoint := *etcdIpFlag + ":" + strconv.Itoa(*etcdClientPortFlag)
     etcdPeerEndpoint := *etcdIpFlag + ":" + strconv.Itoa(*etcdPeerPortFlag)
 
@@ -179,7 +180,7 @@ func main() {
         initialCluster, err = sendMemberAddRequest(
             etcdName, etcdPeerUrl, *localFlag, *bootstraps, *psk)
         if err != nil {
-            panic(err)
+            log.Fatalln(err)
         }
         clusterState = "existing"
     }
@@ -201,7 +202,7 @@ func main() {
     go func() {
         err := cmd.Run()
         if err != nil {
-            panic(err)
+            log.Fatalln(err)
         }
     }()
 
@@ -210,18 +211,30 @@ func main() {
         DialTimeout: 5 * time.Second,
     })
     if err != nil {
-        panic(err)
+        log.Fatalln(err)
     }
     defer etcdCli.Close()
 
     // TODO: Remove this test entry at some point...
     //       Currently useful to serve as a negative test case when pulling images
     // BEGIN test entry
-    err = etcdPut(etcdCli, "hello-there", "general", "kenobi")
-    if err != nil {
-        panic(err)
+    testEntry := registry.ServiceInfo{
+        ContentHash: "UofT",
+        DockerHash: "ECE",
+        NetworkSoftReq: p2putil.PerfInd{RTT: 2019},
+        NetworkHardReq: p2putil.PerfInd{RTT: 2020},
+        CpuReq: 50,
+        MemoryReq: 496,
     }
-    log.Println("Test entry: {hello-there: {general, kenobi}}")
+    testEntryBytes, err := json.Marshal(testEntry)
+    if err != nil {
+        log.Fatalln(err)
+    }
+    err = etcdPut(etcdCli, "test-entry", string(testEntryBytes))
+    if err != nil {
+        log.Fatalln(err)
+    }
+    log.Printf("Test entry: {test-entry: %v}\n", testEntry)
     // END test entry
 
     nodeConfig := p2pnode.NewConfig()
@@ -238,14 +251,13 @@ func main() {
     nodeConfig.HandlerProtocolIDs = append(nodeConfig.HandlerProtocolIDs,
         common.AddProtocolID, common.GetProtocolID, common.ListProtocolID,
         common.DeleteProtocolID, memberAddProtocolID)
-    nodeConfig.Rendezvous = append(nodeConfig.Rendezvous,
-        common.HashLookupRendezvousString)
+    nodeConfig.Rendezvous = append(nodeConfig.Rendezvous, common.RegistryServiceRendezvousString)
     node, err := p2pnode.NewNode(ctx, nodeConfig)
     if err != nil {
         if *localFlag && err.Error() == "Failed to connect to any bootstraps" {
             log.Println("Local run, not connecting to bootstraps")
         } else {
-            panic(err)
+            log.Fatalln(err)
         }
     }
     defer node.Close()
@@ -258,53 +270,14 @@ func main() {
     select {}
 }
 
-func handleAdd(etcdCli *clientv3.Client) func(network.Stream) {
-    return func(stream network.Stream) {
-        data, err := p2putil.ReadMsg(stream)
-        if err != nil {
-            log.Println(err)
-            return
-        }
-
-        reqStr := strings.TrimSpace(string(data))
-        log.Println("Add request:", reqStr)
-
-        var reqInfo common.AddRequest
-        err = json.Unmarshal([]byte(reqStr), &reqInfo)
-        if err != nil {
-            log.Println(err)
-            stream.Reset()
-            return
-        }
-
-        err = etcdPut(etcdCli, reqInfo.ServiceName, reqInfo.ContentHash, reqInfo.DockerHash)
-        if err != nil {
-            log.Println(err)
-            stream.Reset()
-            return
-        }
-
-        respStr := fmt.Sprintf("Added %s:{%s, %s}",
-            reqInfo.ServiceName, reqInfo.ContentHash, reqInfo.DockerHash)
-
-        log.Println("Add response: ", respStr)
-        err = p2putil.WriteMsg(stream, []byte(respStr))
-        if err != nil {
-            log.Println(err)
-            return
-        }
-    }
+func streamError(stream network.Stream, err error) {
+    log.Println(err)
+    stream.Reset()
 }
 
-func etcdPut(etcdCli *clientv3.Client, serviceName, contentHash, dockerHash string) error {
-    putData := common.ServiceData{ContentHash: contentHash, DockerHash: dockerHash}
-    putDataBytes, err := json.Marshal(putData)
-    if err != nil {
-        return err
-    }
-
+func etcdPut(etcdCli *clientv3.Client, serviceName string, putData string) (err error) {
     ctx := context.Background()
-    _, err = etcdCli.Put(ctx, serviceName, string(putDataBytes))
+    _, err = etcdCli.Put(ctx, serviceName, putData)
     if err != nil {
         return err
     }
@@ -312,95 +285,30 @@ func etcdPut(etcdCli *clientv3.Client, serviceName, contentHash, dockerHash stri
     return nil
 }
 
-func handleGet(etcdCli *clientv3.Client) func(network.Stream) {
-    return func(stream network.Stream) {
-        data, err := p2putil.ReadMsg(stream)
-        if err != nil {
-            log.Println(err)
-            return
-        }
+func getServiceInfo(etcdCli *clientv3.Client, query string) (
+    infoStr string, queryOk bool, err error) {
 
-        reqStr := strings.TrimSpace(string(data))
-        log.Println("Lookup request:", reqStr)
-
-        contentHash, dockerHash, ok, err := getServiceHash(etcdCli, reqStr)
-        if err != nil {
-            log.Println(err)
-            stream.Reset()
-            return
-        }
-
-        respInfo := common.GetResponse{contentHash, dockerHash, ok}
-        respBytes, err := json.Marshal(respInfo)
-        if err != nil {
-            log.Println(err)
-            stream.Reset()
-            return
-        }
-
-        log.Println("Lookup response: ", string(respBytes))
-
-        err = p2putil.WriteMsg(stream, respBytes)
-        if err != nil {
-            log.Println(err)
-            return
-        }
+    nameToInfoStr, queryOk, err := etcdGet(etcdCli, query, false)
+    if err != nil {
+        return infoStr, queryOk, err
     }
+
+    infoStr, found := nameToInfoStr[query]
+    if !found {
+        return infoStr, false, err
+    }
+
+    return infoStr, queryOk, err
 }
 
-func handleList(etcdCli *clientv3.Client) func(network.Stream) {
-    return func(stream network.Stream) {
-        log.Println("List request")
-
-        serviceNames, contentHashes, dockerHashes, ok, err :=
-            listServiceHashes(etcdCli)
-        if err != nil {
-            log.Println(err)
-            stream.Reset()
-            return
-        }
-
-        respInfo := common.ListResponse{
-            serviceNames, contentHashes, dockerHashes, ok}
-        respBytes, err := json.Marshal(respInfo)
-        if err != nil {
-            log.Println(err)
-            stream.Reset()
-            return
-        }
-
-        log.Println("List response: ", string(respBytes))
-
-        err = p2putil.WriteMsg(stream, respBytes)
-        if err != nil {
-            log.Println(err)
-            return
-        }
-    }
-}
-
-func getServiceHash(etcdCli *clientv3.Client, query string) (
-    contentHash, dockerHash string, ok bool, err error) {
-
-    _, contentHashes, dockerHashes, ok, err := etcdGet(etcdCli, query, false)
-    if len(contentHashes) > 0 {
-        contentHash = contentHashes[0]
-    }
-    if len(dockerHashes) > 0 {
-        dockerHash = dockerHashes[0]
-    }
-    return contentHash, dockerHash, ok, err
-}
-
-func listServiceHashes(etcdCli *clientv3.Client) (
-    serviceNames, contentHashes, dockerHashes []string, ok bool, err error) {
+func listServiceInfo(etcdCli *clientv3.Client) (
+    nameToInfoStr map[string]string, queryOk bool, err error) {
 
     return etcdGet(etcdCli, "", true)
 }
 
 func etcdGet(etcdCli *clientv3.Client, query string, withPrefix bool) (
-    serviceNames, contentHashes, dockerHashes []string, queryOk bool,
-    err error) {
+    nameToInfoStr map[string]string, queryOk bool, err error) {
 
     ctx := context.Background()
     var getResp *clientv3.GetResponse
@@ -410,56 +318,14 @@ func etcdGet(etcdCli *clientv3.Client, query string, withPrefix bool) (
         getResp, err = etcdCli.Get(ctx, query)
     }
     if err != nil {
-        return serviceNames, contentHashes, dockerHashes, queryOk, err
+        return nameToInfoStr, false, err
     }
 
+    nameToInfoStr = make(map[string]string)
     queryOk = len(getResp.Kvs) > 0
     for _, kv := range getResp.Kvs {
-        var getData common.ServiceData
-        err = json.Unmarshal(kv.Value, &getData)
-        if err != nil {
-            return serviceNames, contentHashes, dockerHashes, queryOk, err
-        }
-        serviceNames = append(serviceNames, string(kv.Key))
-        contentHashes = append(contentHashes, getData.ContentHash)
-        dockerHashes = append(dockerHashes, getData.DockerHash)
+        nameToInfoStr[string(kv.Key)] = string(kv.Value)
     }
 
-    return serviceNames, contentHashes, dockerHashes, queryOk, nil
-}
-
-func handleDelete(etcdCli *clientv3.Client) func(network.Stream) {
-    return func(stream network.Stream) {
-        data, err := p2putil.ReadMsg(stream)
-        if err != nil {
-            log.Println(err)
-            return
-        }
-
-        reqStr := strings.TrimSpace(string(data))
-        log.Println("Delete request:", reqStr)
-
-        ctx := context.Background()
-        deleteResp, err := etcdCli.Delete(ctx, reqStr)
-        if err != nil {
-            log.Println(err)
-            stream.Reset()
-            return
-        }
-
-        var respStr string
-        if deleteResp.Deleted != 0 {
-            respStr = fmt.Sprintf(
-                "Deleted %d entry from hash lookup", deleteResp.Deleted)
-        } else {
-            respStr = "Error: Failed to delete any entries from hash lookup"
-        }
-
-        log.Println("Delete response: ", respStr)
-        err = p2putil.WriteMsg(stream, []byte(respStr))
-        if err != nil {
-            log.Println(err)
-            return
-        }
-    }
+    return nameToInfoStr, queryOk, nil
 }

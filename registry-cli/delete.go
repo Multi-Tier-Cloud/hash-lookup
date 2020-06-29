@@ -20,7 +20,7 @@ import (
     "log"
     "os"
 
-    "github.com/Multi-Tier-Cloud/hash-lookup/hashlookup"
+    "github.com/Multi-Tier-Cloud/service-registry/registry"
 )
 
 func deleteCmd() {
@@ -28,13 +28,14 @@ func deleteCmd() {
 
     deleteUsage := func() {
         exeName := getExeName()
-        fmt.Fprintln(os.Stderr, "Usage:", exeName, "delete [<options>] <name>")
+        fmt.Fprintf(os.Stderr, "Usage of %s delete:\n", exeName)
+        fmt.Fprintf(os.Stderr, "$ %s delete [OPTIONS ...] <service-name>\n", exeName)
         fmt.Fprintln(os.Stderr,
 `
-<name>
+<service-name>
         Name of microservice to delete
 
-<options>`)
+OPTIONS:`)
         deleteFlags.PrintDefaults()
     }
     
@@ -61,11 +62,12 @@ func deleteCmd() {
     }
     defer node.Close()
 
-    respStr, err := hashlookup.DeleteHashWithHostRouting(
+    respStr, err := registry.DeleteServiceWithHostRouting(
         ctx, node.Host, node.RoutingDiscovery, serviceName)
     if err != nil {
         log.Fatalln(err)
     }
 
-    fmt.Println("Response:", respStr)
+    fmt.Println("Response:")
+    fmt.Println(respStr)
 }

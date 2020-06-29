@@ -17,6 +17,7 @@ package main
 import (
     "context"
     "encoding/json"
+    "io/ioutil"
     "log"
     "fmt"
     "strings"
@@ -28,13 +29,12 @@ import (
     "go.etcd.io/etcd/clientv3"
 
     "github.com/Multi-Tier-Cloud/common/p2pnode"
-    "github.com/Multi-Tier-Cloud/common/p2putil"
-    "github.com/Multi-Tier-Cloud/hash-lookup/hl-common"
+    "github.com/Multi-Tier-Cloud/service-registry/common"
 
     "github.com/multiformats/go-multiaddr"
 )
 
-var memberAddProtocolID protocol.ID = "/memberadd/1.0"
+var memberAddProtocolID protocol.ID = "/memberadd/0.1"
 
 type memberAddRequest struct {
     MemberName string
@@ -42,9 +42,8 @@ type memberAddRequest struct {
 }
 
 func sendMemberAddRequest(
-    newMemName, newMemPeerUrl string, local bool,
-    bootstraps []multiaddr.Multiaddr,
-    psk pnet.PSK) (initialCluster string, err error) {
+    newMemName, newMemPeerUrl string, local bool, bootstraps []multiaddr.Multiaddr, psk pnet.PSK) (
+    initialCluster string, err error) {
 
     ctx := context.Background()
     nodeConfig := p2pnode.NewConfig()
@@ -60,7 +59,7 @@ func sendMemberAddRequest(
     }
     defer node.Close()
 
-    reqInfo := memberAddRequest{newMemName, newMemPeerUrl}
+    reqInfo := memberAddRequest{MemberName: newMemName, MemberPeerUrl: newMemPeerUrl}
     reqBytes, err := json.Marshal(reqInfo)
     if err != nil {
         return "", err
@@ -79,9 +78,9 @@ func sendMemberAddRequest(
 
 func handleMemberAdd(etcdCli *clientv3.Client) func(network.Stream) {
     return func(stream network.Stream) {
-        data, err := p2putil.ReadMsg(stream)
+        data, err := ioutil.ReadAll(stream)
         if err != nil {
-            log.Println(err)
+            streamError(stream, err)
             return
         }
 
@@ -91,31 +90,29 @@ func handleMemberAdd(etcdCli *clientv3.Client) func(network.Stream) {
         var reqInfo memberAddRequest
         err = json.Unmarshal([]byte(reqStr), &reqInfo)
         if err != nil {
-            log.Println(err)
-            stream.Reset()
+            streamError(stream, err)
             return
         }
 
-        initialCluster, err := addEtcdMember(
-            etcdCli, reqInfo.MemberName, reqInfo.MemberPeerUrl)
+        initialCluster, err := addEtcdMember(etcdCli, reqInfo.MemberName, reqInfo.MemberPeerUrl)
         if err != nil {
-            log.Println(err)
-            stream.Reset()
+            streamError(stream, err)
             return
         }
 
         log.Println("Member add response: ", initialCluster)
-        err = p2putil.WriteMsg(stream, []byte(initialCluster))
+        _, err = stream.Write([]byte(initialCluster))
         if err != nil {
-            log.Println(err)
+            streamError(stream, err)
             return
         }
+
+        stream.Close()
     }
 }
 
 func addEtcdMember(
-    etcdCli *clientv3.Client, newMemName, newMemPeerUrl string) (
-    initialCluster string, err error) {
+    etcdCli *clientv3.Client, newMemName, newMemPeerUrl string) (initialCluster string, err error) {
 
     ctx := context.Background()
     memAddResp, err := etcdCli.MemberAdd(ctx, []string{newMemPeerUrl})
@@ -132,8 +129,7 @@ func addEtcdMember(
             name = newMemName
         }
         for _, peerUrl := range mem.PeerURLs {
-            clusterPeerUrls = append(
-                clusterPeerUrls, fmt.Sprintf("%s=%s", name, peerUrl))
+            clusterPeerUrls = append(clusterPeerUrls, fmt.Sprintf("%s=%s", name, peerUrl))
         }
     }
 
