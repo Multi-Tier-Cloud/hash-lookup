@@ -133,8 +133,7 @@ func main() {
 func usage() {
     exeName := getExeName()
     fmt.Fprintf(os.Stderr, "Usage of %s:\n", exeName)
-    fmt.Fprintf(os.Stderr,
-        "$ %s [OPTIONS ...] <command>\n", exeName)
+    fmt.Fprintf(os.Stderr, "$ %s [OPTIONS ...] <command>\n", exeName)
 
     // NOTE: Bootstrap is technically *mandatory* right now, not optional,
     //       at least until we can get a fallback working (TODO).

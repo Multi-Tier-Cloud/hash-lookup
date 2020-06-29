@@ -35,6 +35,8 @@ github.com/Multi-Tier-Cloud/docker-driver v0.2.0 h1:YxrYi6+ABjyCWaob+Uf+555DRvOG
 github.com/Multi-Tier-Cloud/docker-driver v0.2.0/go.mod h1:HcQpH9PaHU8neSqmk5kD/oQjezwcgS7FxX/yIkPrKNY=
 github.com/Multi-Tier-Cloud/docker-driver v0.2.1 h1:Ga33KtHEbjv1b86xQLkyuJgXiJ3gk3XF2ftqW3NI72Y=
 github.com/Multi-Tier-Cloud/docker-driver v0.2.1/go.mod h1:dul9gZF271nAwF9KpkcpqM3Zrs2YOmAUYd44Avm7pcM=
+github.com/Multi-Tier-Cloud/docker-driver v0.2.2 h1:fwNWNRScNnTf6LSiqnIdhC7GgoVKUztIjoVDpP1zntA=
+github.com/Multi-Tier-Cloud/docker-driver v0.2.2/go.mod h1:dul9gZF271nAwF9KpkcpqM3Zrs2YOmAUYd44Avm7pcM=
 github.com/Multi-Tier-Cloud/hash-lookup v0.0.0-20200322054456-6ebd2eaf054a/go.mod h1:6lyb4mvH/WgjiEKzDS/CkBYEUE53T3k9zBdhco++R2c=
 github.com/Multi-Tier-Cloud/service-manager v0.2.1 h1:GRgdlCTXDxO6NgLXgyJCDtqJvnBCo6bPz+xFzZGjI/8=
 github.com/Multi-Tier-Cloud/service-manager v0.2.1/go.mod h1:3HmYdie/JgICjWqZ2ju5wANp6zjYIBWn49LnztXn1lM=

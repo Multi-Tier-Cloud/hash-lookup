@@ -29,13 +29,14 @@ func getCmd() {
 
     getUsage := func() {
         exeName := getExeName()
-        fmt.Fprintln(os.Stderr, "Usage:", exeName, "get [<options>] <name>")
+        fmt.Fprintf(os.Stderr, "Usage of %s get:\n", exeName)
+        fmt.Fprintf(os.Stderr, "$ %s get [OPTIONS ...] <service-name>\n", exeName)
         fmt.Fprintln(os.Stderr,
 `
-<name>
+<service-name>
         Name of microservice to get hash of
 
-<options>`)
+OPTIONS:`)
         getFlags.PrintDefaults()
     }
     

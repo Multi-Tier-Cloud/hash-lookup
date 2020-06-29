@@ -1,4 +1,4 @@
-# hash-lookup
+# Service Registry
 
 registry: Client-side library for querying the registry-service.
 
@@ -8,7 +8,7 @@ registry-service: Registry-service which stores information about microservices,
 
 common: Code reused throughout this project.
 
-## Registry
+## Registry Package
 
 Provides 4 registry operations, add/get/list/delete, each with 2 function variants. Functions ending in *Service create a temporary p2p node to communicate with registry-service. Functions ending in *ServiceWithHostRouting take in an existing p2p node and routing discovery to perform the operation without having to create that temporary p2p node. For examples calling these functions, see registry-cli.
 
@@ -59,7 +59,7 @@ func DeleteServiceWithHostRouting(
     deleteResponse string, err error)
 ```
 
-## Registry CLI
+## Registry-CLI
 
 Allows users to easily add/get/list/delete registry-service info. Uses the registry package functions.
 For full usage details run `$ registry-cli --help` or `$ registry-cli <command> --help`.
@@ -96,13 +96,14 @@ Available commands are:
 
 ### Add command
 ```
-Usage: registry-cli add [<options>] <config> <dir> <image-name> <service-name>
+Usage of registry-cli add:
+$ registry-cli add [OPTIONS ...] <config> <image-name> <service-name>
+
+Example:
+$ ./registry-service add --dir ./image-files ./service-conf.json username/service:1.0 my-service:1.0
 
 <config>
         Configuration file
-
-<dir>
-        Directory to find files listed in config
 
 <image-name>
         Docker image of microservice to push to (<username>/<repository>:<tag>)
@@ -110,22 +111,30 @@ Usage: registry-cli add [<options>] <config> <dir> <image-name> <service-name>
 <service-name>
         Name of microservice to register with hash lookup
 
-<options>
+OPTIONS:
   -custom-proxy string
-        Provide a locally built proxy binary instead of building one from source.
+        Use a locally built proxy binary instead of checking out and building one from source.
+  -dir string
+        Directory to find files listed in config file (default ".")
   -no-add
         Build image, but do not push to Dockerhub or add to registry-service
   -proxy-cmd string
-        Use specified command to run proxy. ie. './proxy --configfile conf.json $PROXY_PORT'. Note the automatically generated proxy config file will be named 'conf.json'.
+        Use specified command to run proxy. ie. './proxy --configfile conf.json $PROXY_PORT'
+        Note the automatically generated proxy config file will be named 'conf.json'.
   -proxy-version string
-        Checkout specific version of proxy by supplying a commit hash. By default, will use latest version checked into service-manager master. This argument is supplied to git checkout <commit>, so a branch name or tags/<tag-name> works as well.
+        Checkout specific version of proxy by supplying a commit hash.
+        By default, will use latest version checked into service-manager master.
+        This argument is supplied to git checkout, so a branch name or tags/<tag-name> works as well.
+  -use-existing-image
+        Do not build/push new image. Pull an existing image from DockerHub and add it to registry-service.
+        Note that you still have to provide a config file since it is needed for performance requirements.
 ```
 
 Config is a json file of this format:
 ```
 {
     "NetworkSoftReq": {
-        "RTT": int(milliseconds)
+        "RTT": int (milliseconds)
     },
     "NetworkHardReq": {
         "RTT": int(milliseconds)
@@ -134,7 +143,7 @@ Config is a json file of this format:
     "MemoryReq": int,
 
     "DockerConf": {
-        "From": string(base docker image; defaults to ubuntu:16.04),
+        "From": string(base docker image; default ubuntu:16.04),
         "Copy": [
             [string(local src path), string(image dst path)]
         ],
@@ -142,7 +151,7 @@ Config is a json file of this format:
             string(command)
         ],
         "Cmd": string(command to run your microservice),
-        "ProxyClientMode": bool(true to run proxy in client mode, false for service mode; defaults to false)
+        "ProxyClientMode": bool(true to run proxy in client mode, false for service mode; default false)
     }
 }
 ```
@@ -150,28 +159,31 @@ NetworkSoftReq and NetworkHardReq are performance requirements passed to the pro
 
 ### Get command
 ```
-get [<options>] <name>
+Usage of registry-cli get:
+$ registry-cli get <service-name>
 
-<name>
+<service-name>
         Name of microservice to get hash of
 ```
 
 ### List command
 ```
-list
+Usage of registry-cli list:
+$ registry-cli list
 ```
 
 ### Delete command
 ```
-get [<options>] <name>
+Usage of registry-cli delete:
+$ registry-cli delete <service-name>
 
-<name>
-        Name of microservice to get hash of
+<service-name>
+        Name of microservice to delete
 ```
 
-## Registry Service
+## Registry-Service
 
-The service that stores information about microservices. Any service needs to be registered here before it can be deployed to the system. Stores info in {key, value} pairs, where key is service name, and value is a json encoded ServiceInfo string. Uses etcd key-value store under the hood.
+The service that stores information about microservices. Any service needs to be registered here before it can be deployed to the system. Stores info in {key, value} pairs, where key is service name, and value is a json encoded ServiceInfo string. Uses etcd key-value store under the hood. Each registry-service instance will run its own etcd instance, which will form a cluster together so all instances maintain the same data. When starting a new cluster, run the first registry-service with the --new-etcd-cluster flag. Subsequent instances can omit this flag.
 
 ```
 Usage of registry-service:

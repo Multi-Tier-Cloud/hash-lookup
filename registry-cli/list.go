@@ -19,6 +19,7 @@ import (
     "flag"
     "fmt"
     "log"
+    "os"
 
     "github.com/Multi-Tier-Cloud/hash-lookup/registry"
 )
@@ -26,6 +27,17 @@ import (
 func listCmd() {
     listFlags := flag.NewFlagSet("list", flag.ExitOnError)
 
+    listUsage := func() {
+        exeName := getExeName()
+        fmt.Fprintf(os.Stderr, "Usage of %s list:\n", exeName)
+        fmt.Fprintf(os.Stderr, "$ %s list [OPTIONS ...]\n", exeName)
+        fmt.Fprintln(os.Stderr,
+`
+OPTIONS:`)
+        listFlags.PrintDefaults()
+    }
+    
+    listFlags.Usage = listUsage
     listFlags.Parse(flag.Args()[1:])
 
     ctx, node, err := setupNode(*bootstraps, *psk)

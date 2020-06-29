@@ -28,13 +28,14 @@ func deleteCmd() {
 
     deleteUsage := func() {
         exeName := getExeName()
-        fmt.Fprintln(os.Stderr, "Usage:", exeName, "delete [<options>] <name>")
+        fmt.Fprintf(os.Stderr, "Usage of %s delete:\n", exeName)
+        fmt.Fprintf(os.Stderr, "$ %s delete [OPTIONS ...] <service-name>\n", exeName)
         fmt.Fprintln(os.Stderr,
 `
-<name>
+<service-name>
         Name of microservice to delete
 
-<options>`)
+OPTIONS:`)
         deleteFlags.PrintDefaults()
     }
     

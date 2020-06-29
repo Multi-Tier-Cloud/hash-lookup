@@ -251,7 +251,7 @@ func main() {
     nodeConfig.HandlerProtocolIDs = append(nodeConfig.HandlerProtocolIDs,
         common.AddProtocolID, common.GetProtocolID, common.ListProtocolID,
         common.DeleteProtocolID, memberAddProtocolID)
-    nodeConfig.Rendezvous = append(nodeConfig.Rendezvous, common.HashLookupRendezvousString)
+    nodeConfig.Rendezvous = append(nodeConfig.Rendezvous, common.RegistryServiceRendezvousString)
     node, err := p2pnode.NewNode(ctx, nodeConfig)
     if err != nil {
         if *localFlag && err.Error() == "Failed to connect to any bootstraps" {

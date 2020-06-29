@@ -55,28 +55,34 @@ type ServiceConf struct {
 
 func addCmd() {
     addFlags := flag.NewFlagSet("add", flag.ExitOnError)
+    dirFlag := addFlags.String("dir", ".",
+        "Directory to find files listed in config file")
     customProxyFlag := addFlags.String("custom-proxy", "",
-        "Provide a locally built proxy binary instead of building one from source.")
+        "Use a locally built proxy binary instead of checking out and building one from source.")
     proxyVersionFlag := addFlags.String("proxy-version", "",
-        "Checkout specific version of proxy by supplying a commit hash. " +
-        "By default, will use latest version checked into service-manager master. " +
-        "This argument is supplied to git checkout <commit>, so a branch name or tags/<tag-name> works as well.")
+        "Checkout specific version of proxy by supplying a commit hash.\n" +
+        "By default, will use latest version checked into service-manager master.\n" +
+        "This argument is supplied to git checkout, so a branch name or tags/<tag-name> works as well.")
     proxyCmdFlag := addFlags.String("proxy-cmd", "",
-        "Use specified command to run proxy. ie. './proxy --configfile conf.json $PROXY_PORT'. " +
+        "Use specified command to run proxy. ie. './proxy --configfile conf.json $PROXY_PORT'\n" +
         "Note the automatically generated proxy config file will be named 'conf.json'.")
     noAddFlag := addFlags.Bool("no-add", false,
         "Build image, but do not push to Dockerhub or add to registry-service")
+    useExistingImageFlag := addFlags.Bool("use-existing-image", false,
+        "Do not build/push new image. Pull an existing image from DockerHub and add it to registry-service.\n" +
+        "Note that you still have to provide a config file since it is needed for performance requirements.")
 
     addUsage := func() {
         exeName := getExeName()
-        fmt.Fprintln(os.Stderr, "Usage:", exeName, "add [<options>] <config> <dir> <image-name> <service-name>")
+        fmt.Fprintf(os.Stderr, "Usage of %s add:\n", exeName)
+        fmt.Fprintf(os.Stderr, "$ %s add [OPTIONS ...] <config> <image-name> <service-name>\n", exeName)
         fmt.Fprintln(os.Stderr,
 `
+Example:
+$ ./registry-service add --dir ./image-files ./service-conf.json username/service:1.0 my-service:1.0
+
 <config>
         Configuration file
-
-<dir>
-        Directory to find files listed in config
 
 <image-name>
         Docker image of microservice to push to (<username>/<repository>:<tag>)
@@ -84,29 +90,55 @@ func addCmd() {
 <service-name>
         Name of microservice to register with hash lookup
 
-<options>`)
+OPTIONS:`)
+
         addFlags.PrintDefaults()
+
+        fmt.Fprintln(os.Stderr,
+`
+Config file is a json file of this format:
+{
+    "NetworkSoftReq": {
+        "RTT": int(milliseconds)
+    },
+    "NetworkHardReq": {
+        "RTT": int(milliseconds)
+    },
+    "CpuReq": int,
+    "MemoryReq": int,
+
+    "DockerConf": {
+        "From": string(base docker image; defaults to ubuntu:16.04),
+        "Copy": [
+            [string(local src path), string(image dst path)]
+        ],
+        "Run": [
+            string(command)
+        ],
+        "Cmd": string(command to run your microservice),
+        "ProxyClientMode": bool(true to run proxy in client mode, false for service mode; defaults to false)
     }
-    
+}`)
+    }
+
     addFlags.Usage = addUsage
     addFlags.Parse(flag.Args()[1:])
-    
-    if len(addFlags.Args()) < 4 {
+
+    if len(addFlags.Args()) < 3 {
         fmt.Fprintln(os.Stderr, "Error: missing required arguments")
         addUsage()
         return
     }
 
-    if len(addFlags.Args()) > 4 {
+    if len(addFlags.Args()) > 3 {
         fmt.Fprintln(os.Stderr, "Error: too many arguments")
         addUsage()
         return
     }
 
     configFile := addFlags.Arg(0)
-    srcDir := addFlags.Arg(1)
-    imageName := addFlags.Arg(2)
-    serviceName := addFlags.Arg(3)
+    imageName := addFlags.Arg(1)
+    serviceName := addFlags.Arg(2)
 
     configBytes, err := ioutil.ReadFile(configFile)
     if err != nil {
@@ -117,13 +149,24 @@ func addCmd() {
         log.Fatalln(err)
     }
 
-    err = buildServiceImage(config, srcDir, imageName, serviceName,
-        *customProxyFlag, *proxyVersionFlag, *proxyCmdFlag)
-    if err != nil {
-        log.Fatalln(err)
-    }
+    var digest string
 
-    fmt.Println("Built image successfully")
+    if !(*useExistingImageFlag) {
+        fmt.Println("Building new image")
+        err = buildServiceImage(config, imageName, serviceName, *dirFlag,
+            *customProxyFlag, *proxyVersionFlag, *proxyCmdFlag)
+        if err != nil {
+            log.Fatalln(err)
+        }
+        fmt.Println("Built image successfully")
+    } else {
+        fmt.Println("Pulling existing image")
+        digest, err = driver.PullImage(imageName)
+        if err != nil {
+            log.Fatalln(err)
+        }
+        fmt.Println("Image pulled successfully")
+    }
 
     if *noAddFlag {
         return
@@ -133,29 +176,27 @@ func addCmd() {
     if err != nil {
         log.Fatalln(err)
     }
-
     fmt.Println("Saved image successfully")
 
     hash, err := util.IpfsHashBytes(imageBytes)
     if err != nil {
         log.Fatalln(err)
     }
-
     fmt.Println("Hashed image successfully:", hash)
-    fmt.Println("Pushing to DockerHub")
 
-    digest, err := authAndPushImage(imageName)
-    if err != nil {
-        log.Fatalln(err)
+    if !(*useExistingImageFlag) {
+        fmt.Println("Pushing to DockerHub")
+        digest, err = authAndPushImage(imageName)
+        if err != nil {
+            log.Fatalln(err)
+        }
+        fmt.Println("Pushed to DockerHub successfully")
     }
-
-    fmt.Println("Pushed to DockerHub successfully")
 
     parts := strings.Split(imageName, ":")
     dockerId := parts[0] + "@" + digest
 
-    fmt.Printf("%s : {ContentHash: %s, DockerHash: %s}\n",
-        serviceName, hash, dockerId)
+    fmt.Printf("%s : {ContentHash: %s, DockerHash: %s}\n", serviceName, hash, dockerId)
 
     ctx, node, err := setupNode(*bootstraps, *psk)
     if err != nil {
@@ -189,10 +230,10 @@ func unmarshalServiceConf(configBytes []byte) (config ServiceConf, err error) {
     return config, nil
 }
 
-func buildServiceImage(config ServiceConf, srcDir, imageName, serviceName,
+func buildServiceImage(config ServiceConf, imageName, serviceName, srcDir,
     customProxy, proxyVersion, proxyCmd string) error {
 
-    buildContext, err := createDockerBuildContext(config, srcDir, serviceName,
+    buildContext, err := createDockerBuildContext(config, serviceName, srcDir,
         customProxy, proxyVersion, proxyCmd)
     if err != nil {
         return err
@@ -206,7 +247,7 @@ func buildServiceImage(config ServiceConf, srcDir, imageName, serviceName,
     return nil
 }
 
-func createDockerBuildContext(config ServiceConf, srcDir, serviceName,
+func createDockerBuildContext(config ServiceConf, serviceName, srcDir,
     customProxy, proxyVersion, proxyCmd string) (imageBuildContext *bytes.Buffer, err error) {
 
     imageBuildContext = new(bytes.Buffer)
