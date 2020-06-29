@@ -40,7 +40,7 @@ var (
     commands = []commandData{
         commandData{
             "add",
-            "Hash a microservice and add it to the hash-lookup service",
+            "Hash a microservice and add it to the registry-service",
             addCmd,
         },
         commandData{
@@ -50,7 +50,7 @@ var (
         },
         commandData{
             "list",
-            "List all microservices and data stored by the hash-lookup service",
+            "List all microservices and data stored by the registry-service",
             listCmd,
         },
         commandData{

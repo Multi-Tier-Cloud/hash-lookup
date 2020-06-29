@@ -65,7 +65,7 @@ func addCmd() {
         "Use specified command to run proxy. ie. './proxy --configfile conf.json $PROXY_PORT'. " +
         "Note the automatically generated proxy config file will be named 'conf.json'.")
     noAddFlag := addFlags.Bool("no-add", false,
-        "Build image, but do not push to Dockerhub or add to hash-lookup")
+        "Build image, but do not push to Dockerhub or add to registry-service")
 
     addUsage := func() {
         exeName := getExeName()
@@ -171,7 +171,7 @@ func addCmd() {
         CpuReq: config.CpuReq,
         MemoryReq: config.MemoryReq,
     }
-    respStr, err := registry.AddHashWithHostRouting(
+    respStr, err := registry.AddServiceWithHostRouting(
         ctx, node.Host, node.RoutingDiscovery, serviceName, info)
     if err != nil {
         log.Fatalln(err)

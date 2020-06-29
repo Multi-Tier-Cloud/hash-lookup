@@ -34,7 +34,7 @@ import (
 )
 
 const (
-    HashLookupRendezvousString string = "hash-lookup"
+    RegistryServiceRendezvousString string = "registry-service"
 
     AddProtocolID protocol.ID = "/add/0.1"
     GetProtocolID protocol.ID = "/get/0.1"
@@ -106,10 +106,10 @@ func SendRequestWithHostRouting(
             log.Println()
         }
 
-        peerChan, err := routingDiscovery.FindPeers(ctx, HashLookupRendezvousString)
+        peerChan, err := routingDiscovery.FindPeers(ctx, RegistryServiceRendezvousString)
         if err != nil {
             return nil, fmt.Errorf("ERROR: Unable to find peer with service ID %s\n%w",
-                                    HashLookupRendezvousString, err)
+                                    RegistryServiceRendezvousString, err)
         }
 
         for peer := range peerChan {
@@ -138,5 +138,5 @@ func SendRequestWithHostRouting(
         }
     }
 
-    return nil, errors.New("hl-common: Failed to connect to any hash-lookup peers")
+    return nil, errors.New("registry: Failed to connect to any registry-service peers")
 }

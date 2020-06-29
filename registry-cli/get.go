@@ -62,7 +62,7 @@ func getCmd() {
     }
     defer node.Close()
 
-    info, err := registry.GetHashWithHostRouting(
+    info, err := registry.GetServiceWithHostRouting(
         ctx, node.Host, node.RoutingDiscovery, serviceName)
     if err != nil {
         log.Fatalln(err)

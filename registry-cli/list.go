@@ -34,7 +34,7 @@ func listCmd() {
     }
     defer node.Close()
 
-    nameToInfo, err := registry.ListHashesWithHostRouting(ctx, node.Host, node.RoutingDiscovery)
+    nameToInfo, err := registry.ListServicesWithHostRouting(ctx, node.Host, node.RoutingDiscovery)
     if err != nil {
         log.Fatalln(err)
     }

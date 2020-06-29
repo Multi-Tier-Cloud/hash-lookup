@@ -1,57 +1,67 @@
 # hash-lookup
 
-registry: Client-side library for querying the Registry Service.
+registry: Client-side library for querying the registry-service.
 
-registry-cli: Client-side CLI tool used to interact with Registry Service.
+registry-cli: Client-side CLI tool used to interact with registry-service.
 
-registry-service: Registry Service which stores information about microservices, indexed by name.
+registry-service: Registry-service which stores information about microservices, indexed by name.
 
 common: Code reused throughout this project.
 
 ## Registry
 
-Provides 4 registry operations, add/get/list/delete, each with 2 function variants. Functions ending in *Hash create a temporary p2p node to communicate with Registry Service. Functions ending in *HashWithHostRouting take in an existing p2p node and routing discovery to perform the oepration without having to create that temporary p2p node. Note that ServiceInfo is defined in common package. For examples calling these functions, see registry-cli.
+Provides 4 registry operations, add/get/list/delete, each with 2 function variants. Functions ending in *Service create a temporary p2p node to communicate with registry-service. Functions ending in *ServiceWithHostRouting take in an existing p2p node and routing discovery to perform the operation without having to create that temporary p2p node. For examples calling these functions, see registry-cli.
 
 ```
-func AddHash(
+type ServiceInfo struct {
+    ContentHash string
+    DockerHash string
+    NetworkSoftReq p2putil.PerfInd
+    NetworkHardReq p2putil.PerfInd
+    CpuReq int
+    MemoryReq int
+}
+
+
+func AddService(
     bootstraps []multiaddr.Multiaddr, psk pnet.PSK, serviceName string, info ServiceInfo) (
     addResponse string, err error)
 
-func AddHashWithHostRouting(
+func AddServiceWithHostRouting(
     ctx context.Context, host host.Host, routingDiscovery *discovery.RoutingDiscovery, serviceName string, info ServiceInfo) (
     addResponse string, err error)
 
 
-func GetHash(
+func GetService(
     bootstraps []multiaddr.Multiaddr, psk pnet.PSK, query string) (
     info ServiceInfo, err error)
 
-func GetHashWithHostRouting(
+func GetServiceWithHostRouting(
     ctx context.Context, host host.Host, routingDiscovery *discovery.RoutingDiscovery, query string) (
     info ServiceInfo, err error)
 
 
-func ListHashes(
+func ListServicees(
     bootstraps []multiaddr.Multiaddr, psk pnet.PSK) (
     nameToInfo map[string]ServiceInfo, err error)
 
-func ListHashesWithHostRouting(
+func ListServiceesWithHostRouting(
     ctx context.Context, host host.Host, routingDiscovery *discovery.RoutingDiscovery) (
     nameToInfo map[string]ServiceInfo, err error)
 
 
-func DeleteHash(
+func DeleteService(
     bootstraps []multiaddr.Multiaddr, psk pnet.PSK, serviceName string) (
     deleteResponse string, err error)
 
-func DeleteHashWithHostRouting(
+func DeleteServiceWithHostRouting(
     ctx context.Context, host host.Host, routingDiscovery *discovery.RoutingDiscovery, serviceName string) (
     deleteResponse string, err error)
 ```
 
 ## Registry CLI
 
-Allows users to easily add/get/list/delete registry service info. Uses the registry package functions.
+Allows users to easily add/get/list/delete registry-service info. Uses the registry package functions.
 For full usage details run `$ registry-cli --help` or `$ registry-cli <command> --help`.
 
 ```
@@ -75,18 +85,18 @@ OPTIONS:
 
 Available commands are:
   add
-        Hash a microservice and add it to the hash-lookup service
+        Hash a microservice and add it to the registry-service
   get
         Get the content hash and Docker ID of a microservice
   list
-        List all microservices and data stored by the hash-lookup service
+        List all microservices and data stored by the registry-service
   delete
         Delete a microservice entry
 ```
 
 ### Add command
 ```
-add [<options>] <config> <dir> <image-name> <service-name>
+Usage: registry-cli add [<options>] <config> <dir> <image-name> <service-name>
 
 <config>
         Configuration file
@@ -104,7 +114,7 @@ add [<options>] <config> <dir> <image-name> <service-name>
   -custom-proxy string
         Provide a locally built proxy binary instead of building one from source.
   -no-add
-        Build image, but do not push to Dockerhub or add to hash-lookup
+        Build image, but do not push to Dockerhub or add to registry-service
   -proxy-cmd string
         Use specified command to run proxy. ie. './proxy --configfile conf.json $PROXY_PORT'. Note the automatically generated proxy config file will be named 'conf.json'.
   -proxy-version string
@@ -114,35 +124,29 @@ add [<options>] <config> <dir> <image-name> <service-name>
 Config is a json file of this format:
 ```
 {
-    "PerfConf": {
-        "Perf": {
-            "SoftReq": {
-                "RTT": int(milliseconds)
-            },
-            "HardReq": {
-                "RTT": int(milliseconds)
-            }
-        }
-    }
+    "NetworkSoftReq": {
+        "RTT": int(milliseconds)
+    },
+    "NetworkHardReq": {
+        "RTT": int(milliseconds)
+    },
+    "CpuReq": int,
+    "MemoryReq": int,
 
     "DockerConf": {
-        "From": string(base docker image; defaults to ubuntu:16.04)
+        "From": string(base docker image; defaults to ubuntu:16.04),
         "Copy": [
             [string(local src path), string(image dst path)]
-        ]
+        ],
         "Run": [
             string(command)
-        ]
-        "Cmd": string(command to run your microservice)
-        "ProxyClientMode": bool(true to run proxy in client mode, false for service mode)
-    }
-
-    "AllocationReq": {
-        "RTT": int(milliseconds)
+        ],
+        "Cmd": string(command to run your microservice),
+        "ProxyClientMode": bool(true to run proxy in client mode, false for service mode; defaults to false)
     }
 }
 ```
-PerfConf defines performance requirements passed to the proxy, used when the proxy selects microservices to connect to. DockerConf defines instructions for building the docker image for your microservice. They mostly translate to dockerfile directives. AllocationReq defines performance requirements needed to allocate a new instance of this microservice.
+NetworkSoftReq and NetworkHardReq are performance requirements passed to the proxy, used when the proxy selects microservices to connect to. DockerConf defines instructions for building the docker image for your microservice. They mostly translate to dockerfile directives. For examples, see registry-cli/add-test.
 
 ### Get command
 ```
@@ -167,7 +171,7 @@ get [<options>] <name>
 
 ## Registry Service
 
-The service that stores information about microservices. Any service needs to be registered here before it can be deployed to the system. Stores info in {key, value} pairs, where key is service name, and value is a ServiceInfo. Uses etcd key-value store under the hood.
+The service that stores information about microservices. Any service needs to be registered here before it can be deployed to the system. Stores info in {key, value} pairs, where key is service name, and value is a json encoded ServiceInfo string. Uses etcd key-value store under the hood.
 
 ```
 Usage of registry-service:
@@ -208,14 +212,4 @@ Usage of registry-service:
         and services to the same network.
         Alternatively, an environment variable named P2P_PSK can
         be set with the passphrase.
-```
-
-## Common
-
-```
-type ServiceInfo struct {
-    ContentHash string
-    DockerHash string
-    AllocationReq p2putil.PerfInd
-}
 ```

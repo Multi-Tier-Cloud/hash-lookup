@@ -61,7 +61,7 @@ func deleteCmd() {
     }
     defer node.Close()
 
-    respStr, err := registry.DeleteHashWithHostRouting(
+    respStr, err := registry.DeleteServiceWithHostRouting(
         ctx, node.Host, node.RoutingDiscovery, serviceName)
     if err != nil {
         log.Fatalln(err)

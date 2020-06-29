@@ -40,7 +40,7 @@ type ServiceInfo struct {
 
 // Add
 
-func AddHash(bootstraps []multiaddr.Multiaddr, psk pnet.PSK, serviceName string, info ServiceInfo) (
+func AddService(bootstraps []multiaddr.Multiaddr, psk pnet.PSK, serviceName string, info ServiceInfo) (
     addResponse string, err error) {
 
     reqBytes, err := marshalAddRequest(serviceName, info)
@@ -56,7 +56,7 @@ func AddHash(bootstraps []multiaddr.Multiaddr, psk pnet.PSK, serviceName string,
     return string(response), nil
 }
 
-func AddHashWithHostRouting(
+func AddServiceWithHostRouting(
     ctx context.Context, host host.Host, routingDiscovery *discovery.RoutingDiscovery,
     serviceName string, info ServiceInfo) (addResponse string, err error) {
 
@@ -85,7 +85,7 @@ func marshalAddRequest(serviceName string, info ServiceInfo) (addRequest []byte,
 
 // Get
 
-func GetHash(bootstraps []multiaddr.Multiaddr, psk pnet.PSK, query string) (
+func GetService(bootstraps []multiaddr.Multiaddr, psk pnet.PSK, query string) (
     info ServiceInfo, err error) {
 
     response, err := common.SendRequest(bootstraps, psk, common.GetProtocolID, []byte(query))
@@ -96,7 +96,7 @@ func GetHash(bootstraps []multiaddr.Multiaddr, psk pnet.PSK, query string) (
     return unmarshalGetResponse(response)
 }
 
-func GetHashWithHostRouting(
+func GetServiceWithHostRouting(
     ctx context.Context, host host.Host, routingDiscovery *discovery.RoutingDiscovery, query string) (
     info ServiceInfo, err error) {
 
@@ -130,7 +130,7 @@ func unmarshalGetResponse(getResponse []byte) (info ServiceInfo, err error) {
 
 // List
 
-func ListHashes(bootstraps []multiaddr.Multiaddr, psk pnet.PSK) (
+func ListServices(bootstraps []multiaddr.Multiaddr, psk pnet.PSK) (
     nameToInfo map[string]ServiceInfo, err error) {
 
     response, err := common.SendRequest(bootstraps, psk, common.ListProtocolID, []byte{})
@@ -141,7 +141,7 @@ func ListHashes(bootstraps []multiaddr.Multiaddr, psk pnet.PSK) (
     return unmarshalListResponse(response)
 }
 
-func ListHashesWithHostRouting(
+func ListServicesWithHostRouting(
     ctx context.Context, host host.Host, routingDiscovery *discovery.RoutingDiscovery) (
     nameToInfo map[string]ServiceInfo, err error) {
 
@@ -180,7 +180,7 @@ func unmarshalListResponse(listResponse []byte) (nameToInfo map[string]ServiceIn
 
 // Delete
 
-func DeleteHash(bootstraps []multiaddr.Multiaddr, psk pnet.PSK, serviceName string) (
+func DeleteService(bootstraps []multiaddr.Multiaddr, psk pnet.PSK, serviceName string) (
     deleteResponse string, err error) {
 
     response, err := common.SendRequest(bootstraps, psk, common.DeleteProtocolID, []byte(serviceName))
@@ -191,7 +191,7 @@ func DeleteHash(bootstraps []multiaddr.Multiaddr, psk pnet.PSK, serviceName stri
     return string(response), nil
 }
 
-func DeleteHashWithHostRouting(
+func DeleteServiceWithHostRouting(
     ctx context.Context, host host.Host, routingDiscovery *discovery.RoutingDiscovery, serviceName string) (
     deleteResponse string, err error) {
 
