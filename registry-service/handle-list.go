@@ -22,7 +22,7 @@
 
     "go.etcd.io/etcd/clientv3"
 
-    "github.com/Multi-Tier-Cloud/hash-lookup/common"
+    "github.com/Multi-Tier-Cloud/service-registry/common"
 )
 
 func handleList(etcdCli *clientv3.Client) func(network.Stream) {

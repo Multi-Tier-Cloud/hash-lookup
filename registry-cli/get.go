@@ -21,7 +21,7 @@ import (
     "log"
     "os"
 
-    "github.com/Multi-Tier-Cloud/hash-lookup/registry"
+    "github.com/Multi-Tier-Cloud/service-registry/registry"
 )
 
 func getCmd() {

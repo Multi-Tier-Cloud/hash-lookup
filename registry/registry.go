@@ -26,7 +26,7 @@ import (
     "github.com/multiformats/go-multiaddr"
 
     "github.com/Multi-Tier-Cloud/common/p2putil"
-    "github.com/Multi-Tier-Cloud/hash-lookup/common"
+    "github.com/Multi-Tier-Cloud/service-registry/common"
 )
 
 type ServiceInfo struct {

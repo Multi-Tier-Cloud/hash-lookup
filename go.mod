@@ -1,4 +1,4 @@
-module github.com/Multi-Tier-Cloud/hash-lookup
+module github.com/Multi-Tier-Cloud/service-registry
 
 go 1.13
 

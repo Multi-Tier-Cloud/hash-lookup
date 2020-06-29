@@ -34,7 +34,7 @@ import (
     "github.com/Multi-Tier-Cloud/common/p2putil"
     "github.com/Multi-Tier-Cloud/common/util"
     driver "github.com/Multi-Tier-Cloud/docker-driver/docker_driver"
-    "github.com/Multi-Tier-Cloud/hash-lookup/registry"
+    "github.com/Multi-Tier-Cloud/service-registry/registry"
     "github.com/Multi-Tier-Cloud/service-manager/conf"
 )
 

@@ -29,7 +29,7 @@ import (
     "go.etcd.io/etcd/clientv3"
 
     "github.com/Multi-Tier-Cloud/common/p2pnode"
-    "github.com/Multi-Tier-Cloud/hash-lookup/common"
+    "github.com/Multi-Tier-Cloud/service-registry/common"
 
     "github.com/multiformats/go-multiaddr"
 )
