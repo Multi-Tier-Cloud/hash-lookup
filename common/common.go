@@ -14,12 +14,13 @@
  */
 package common
 
+// Code reused throughout this repo
+
 import (
     "context"
     "errors"
     "fmt"
     "log"
-    "math"
     "time"
 
     "github.com/libp2p/go-libp2p-core/host"
@@ -31,6 +32,7 @@ import (
 
     "github.com/Multi-Tier-Cloud/common/p2pnode"
     "github.com/Multi-Tier-Cloud/common/p2putil"
+    "github.com/Multi-Tier-Cloud/common/util"
 )
 
 const (
@@ -71,6 +73,7 @@ func init() {
     log.SetFlags(log.Ldate | log.Lmicroseconds | log.Lshortfile)
 }
 
+// Send request to registry-service, creating temporary libp2p node
 func SendRequest(
     bootstraps []multiaddr.Multiaddr, psk pnet.PSK, protocolID protocol.ID, request []byte) (
     response []byte, err error) {
@@ -88,27 +91,19 @@ func SendRequest(
     return SendRequestWithHostRouting(ctx, node.Host, node.RoutingDiscovery, protocolID, request)
 }
 
+// Send request to registry-service, without creating temporary libp2p node
 func SendRequestWithHostRouting(
     ctx context.Context, host host.Host, routingDiscovery *discovery.RoutingDiscovery,
     protocolID protocol.ID, request []byte) (response []byte, err error) {
 
-    maxConnAttempts := 5
-    for connAttempts := 0; connAttempts < maxConnAttempts; connAttempts++ {
-        // Perform simple exponential backoff
-        if connAttempts > 0 {
-            sleepDuration := int(math.Pow(2, float64(connAttempts)))
-            for i := 0; i < sleepDuration; i++ {
-                log.Printf("\rUnable to connect to any peers, " +
-                    "retrying in %d seconds...     ",
-                    sleepDuration - i)
-                time.Sleep(time.Second)
-            }
-            log.Println()
-        }
-
+    eba, err := util.NewExpoBackoffAttempts(1 * time.Second, 8 * time.Second, 5)
+    if err != nil {
+        return nil, err
+    }
+    for eba.Attempt() {
         peerChan, err := routingDiscovery.FindPeers(ctx, RegistryServiceRendezvousString)
         if err != nil {
-            return nil, fmt.Errorf("ERROR: Unable to find peer with service ID %s\n%w",
+            return nil, fmt.Errorf("registry: Unable to find peer with service ID %s\n%w",
                                     RegistryServiceRendezvousString, err)
         }
 

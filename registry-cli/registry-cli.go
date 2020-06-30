@@ -14,6 +14,8 @@
  */
 package main
 
+// Client-side CLI tool used to interact with registry-service
+
 import (
     "context"
     "flag"

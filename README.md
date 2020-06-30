@@ -6,7 +6,7 @@ registry-cli: Client-side CLI tool used to interact with registry-service.
 
 registry-service: Registry-service which stores information about microservices, indexed by name.
 
-common: Code reused throughout this project.
+common: Code reused throughout this repo.
 
 ## Registry Package
 
@@ -22,7 +22,7 @@ type ServiceInfo struct {
     MemoryReq int
 }
 
-
+// Add service info {serviceName, info} to registry-service
 func AddService(
     bootstraps []multiaddr.Multiaddr, psk pnet.PSK, serviceName string, info ServiceInfo) (
     addResponse string, err error)
@@ -31,7 +31,7 @@ func AddServiceWithHostRouting(
     ctx context.Context, host host.Host, routingDiscovery *discovery.RoutingDiscovery, serviceName string, info ServiceInfo) (
     addResponse string, err error)
 
-
+// Get service info from registry-service by searching for service with a name matching the given query
 func GetService(
     bootstraps []multiaddr.Multiaddr, psk pnet.PSK, query string) (
     info ServiceInfo, err error)
@@ -40,7 +40,8 @@ func GetServiceWithHostRouting(
     ctx context.Context, host host.Host, routingDiscovery *discovery.RoutingDiscovery, query string) (
     info ServiceInfo, err error)
 
-
+// List all services added to registry-service
+// Returns mapping from service name to service info
 func ListServicees(
     bootstraps []multiaddr.Multiaddr, psk pnet.PSK) (
     nameToInfo map[string]ServiceInfo, err error)
@@ -49,7 +50,7 @@ func ListServiceesWithHostRouting(
     ctx context.Context, host host.Host, routingDiscovery *discovery.RoutingDiscovery) (
     nameToInfo map[string]ServiceInfo, err error)
 
-
+// Delete service with given serviceName from registry-service
 func DeleteService(
     bootstraps []multiaddr.Multiaddr, psk pnet.PSK, serviceName string) (
     deleteResponse string, err error)
@@ -134,7 +135,7 @@ Config is a json file of this format:
 ```
 {
     "NetworkSoftReq": {
-        "RTT": int (milliseconds)
+        "RTT": int(milliseconds)
     },
     "NetworkHardReq": {
         "RTT": int(milliseconds)

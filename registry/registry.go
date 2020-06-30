@@ -14,6 +14,8 @@
  */
 package registry
 
+// Client-side library for querying the registry-service
+
 import (
     "context"
     "encoding/json"
@@ -29,6 +31,9 @@ import (
     "github.com/Multi-Tier-Cloud/service-registry/common"
 )
 
+// Microservice info stored by registry-service
+// Encoding/decoding of this struct is done client-side
+// Registry-service simply stores the string it is given
 type ServiceInfo struct {
     ContentHash string
     DockerHash string
@@ -38,8 +43,12 @@ type ServiceInfo struct {
     MemoryReq int
 }
 
-// Add
+// Functions ending in *Service create a temporary p2p node to communicate with registry-service
+// Must pass in bootstrap addresses to connect to and optional PSK
+// Functions ending in *ServiceWithHostRouting take in an existing p2p node and routing discovery
+// to perform the operation without having to create that temporary p2p node
 
+// Add service info {serviceName, info} to registry-service
 func AddService(bootstraps []multiaddr.Multiaddr, psk pnet.PSK, serviceName string, info ServiceInfo) (
     addResponse string, err error) {
 
@@ -83,8 +92,7 @@ func marshalAddRequest(serviceName string, info ServiceInfo) (addRequest []byte,
     return json.Marshal(reqInfo)
 }
 
-// Get
-
+// Get service info from registry-service by searching for service with a name matching the given query
 func GetService(bootstraps []multiaddr.Multiaddr, psk pnet.PSK, query string) (
     info ServiceInfo, err error) {
 
@@ -128,8 +136,8 @@ func unmarshalGetResponse(getResponse []byte) (info ServiceInfo, err error) {
     return info, nil
 }
 
-// List
-
+// List all services added to registry-service
+// Returns mapping from service name to service info
 func ListServices(bootstraps []multiaddr.Multiaddr, psk pnet.PSK) (
     nameToInfo map[string]ServiceInfo, err error) {
 
@@ -178,8 +186,7 @@ func unmarshalListResponse(listResponse []byte) (nameToInfo map[string]ServiceIn
     return nameToInfo, nil
 }
 
-// Delete
-
+// Delete service with given serviceName from registry-service
 func DeleteService(bootstraps []multiaddr.Multiaddr, psk pnet.PSK, serviceName string) (
     deleteResponse string, err error) {
 

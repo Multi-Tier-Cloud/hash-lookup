@@ -38,6 +38,8 @@ import (
     "github.com/Multi-Tier-Cloud/service-manager/conf"
 )
 
+// Decode json config file into this struct
+// Defines performance requirements and instructions for building docker image
 type ServiceConf struct {
     NetworkSoftReq p2putil.PerfInd
     NetworkHardReq p2putil.PerfInd
@@ -136,10 +138,12 @@ Config file is a json file of this format:
         return
     }
 
+    // Positional arguments
     configFile := addFlags.Arg(0)
     imageName := addFlags.Arg(1)
     serviceName := addFlags.Arg(2)
 
+    // Read json config file
     configBytes, err := ioutil.ReadFile(configFile)
     if err != nil {
         log.Fatalln(err)
@@ -151,6 +155,7 @@ Config file is a json file of this format:
 
     var digest string
 
+    // Check whether to build new image or pull existing image
     if !(*useExistingImageFlag) {
         fmt.Println("Building new image")
         err = buildServiceImage(config, imageName, serviceName, *dirFlag,
@@ -169,21 +174,24 @@ Config file is a json file of this format:
     }
 
     if *noAddFlag {
-        return
+        return // Don't push to DockerHub or add to registry-service, just return early
     }
 
+    // Save tar archive of image
     imageBytes, err := driver.SaveImage(imageName)
     if err != nil {
         log.Fatalln(err)
     }
     fmt.Println("Saved image successfully")
 
+    // Get content hash of image
     hash, err := util.IpfsHashBytes(imageBytes)
     if err != nil {
         log.Fatalln(err)
     }
     fmt.Println("Hashed image successfully:", hash)
 
+    // If used existing image, no need to push to DockerHub
     if !(*useExistingImageFlag) {
         fmt.Println("Pushing to DockerHub")
         digest, err = authAndPushImage(imageName)
@@ -193,6 +201,8 @@ Config file is a json file of this format:
         fmt.Println("Pushed to DockerHub successfully")
     }
 
+    // Construct docker ID used for pulling image
+    // Take beginning <username>/<repo> portion, and concatenate image digest
     parts := strings.Split(imageName, ":")
     dockerId := parts[0] + "@" + digest
 
@@ -204,6 +214,7 @@ Config file is a json file of this format:
     }
     defer node.Close()
 
+    // Add to registry-service
     info := registry.ServiceInfo{
         ContentHash: hash,
         DockerHash: dockerId,
