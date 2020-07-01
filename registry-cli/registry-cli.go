@@ -42,17 +42,17 @@ var (
     commands = []commandData{
         commandData{
             "add",
-            "Hash a microservice and add it to the registry-service",
+            "Builds a Docker image for a given microservice, pushes to DockerHub, and adds it to the registry-service",
             addCmd,
         },
         commandData{
             "get",
-            "Get the content hash and Docker ID of a microservice",
+            "Get information about a microservice",
             getCmd,
         },
         commandData{
             "list",
-            "List all microservices and data stored by the registry-service",
+            "List all microservices and information stored by the registry-service",
             listCmd,
         },
         commandData{

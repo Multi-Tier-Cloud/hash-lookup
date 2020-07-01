@@ -33,6 +33,8 @@ func getCmd() {
         fmt.Fprintf(os.Stderr, "$ %s get [OPTIONS ...] <service-name>\n", exeName)
         fmt.Fprintln(os.Stderr,
 `
+Get information about a microservice
+
 <service-name>
         Name of microservice to get hash of
 

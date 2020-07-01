@@ -86,11 +86,11 @@ OPTIONS:
 
 Available commands are:
   add
-        Hash a microservice and add it to the registry-service
+        Builds a Docker image for a given microservice, pushes to DockerHub, and adds it to the registry-service
   get
-        Get the content hash and Docker ID of a microservice
+        Get information about a microservice
   list
-        List all microservices and data stored by the registry-service
+        List all microservices and information stored by the registry-service
   delete
         Delete a microservice entry
 ```
@@ -99,6 +99,8 @@ Available commands are:
 ```
 Usage of registry-cli add:
 $ registry-cli add [OPTIONS ...] <config> <image-name> <service-name>
+
+Builds a Docker image for a given microservice, pushes to DockerHub, and adds it to the registry-service
 
 Example:
 $ ./registry-service add --dir ./image-files ./service-conf.json username/service:1.0 my-service:1.0
@@ -131,7 +133,7 @@ OPTIONS:
         Note that you still have to provide a config file since it is needed for performance requirements.
 ```
 
-Config is a json file of this format:
+Config is a json file used to setup the microservice. Its format is as follows:
 ```
 {
     "NetworkSoftReq": {
@@ -156,12 +158,29 @@ Config is a json file of this format:
     }
 }
 ```
-NetworkSoftReq and NetworkHardReq are performance requirements passed to the proxy, used when the proxy selects microservices to connect to. DockerConf defines instructions for building the docker image for your microservice. They mostly translate to dockerfile directives. For examples, see registry-cli/add-test.
+Every microservice gets packaged with a proxy in the same container. NetworkSoftReq and NetworkHardReq are performance requirements passed to the proxy, used when the proxy selects microservices to connect to. DockerConf defines instructions for building the docker image for your microservice. They mostly translate to Dockerfile directives. For examples, see registry-cli/add-test and https://github.com/Multi-Tier-Cloud/demos.
+
+The Dockerfile generated for building the image starts with the following core directives:
+```
+WORKDIR /app
+COPY proxy .
+COPY conf.json .
+ENV PROXY_PORT=4201
+ENV PROXY_IP=127.0.0.1
+ENV SERVICE_PORT=8080
+ENV P2P_BOOTSTRAPS=
+ENV P2P_PSK=
+```
+It sets the working directory in the image to /app, and copies in a proxy and its proxy config file. So in the service config's DockerConf.Copy field, the image destination path is relative to /app. This is probably where you microservice's files should go as well.
+
+All the environment variables will be set dynamically when a new container is spun up. In particular, note the SERVICE_PORT and PROXY_IP variables. PROXY_IP is the IP address of the machine that the container will be running on. SERVICE_PORT is the port that the microserivce should listen on. You will probably use these in the service config's DockerConf.Cmd field.
 
 ### Get command
 ```
 Usage of registry-cli get:
 $ registry-cli get <service-name>
+
+Get information about a microservice
 
 <service-name>
         Name of microservice to get hash of
@@ -171,12 +190,16 @@ $ registry-cli get <service-name>
 ```
 Usage of registry-cli list:
 $ registry-cli list
+
+List all microservices and information stored by the registry-service
 ```
 
 ### Delete command
 ```
 Usage of registry-cli delete:
 $ registry-cli delete <service-name>
+
+Delete a microservice entry
 
 <service-name>
         Name of microservice to delete

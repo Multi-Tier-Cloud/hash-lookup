@@ -80,14 +80,16 @@ func addCmd() {
         fmt.Fprintf(os.Stderr, "$ %s add [OPTIONS ...] <config> <image-name> <service-name>\n", exeName)
         fmt.Fprintln(os.Stderr,
 `
+Builds a Docker image for a given microservice, pushes to DockerHub, and adds it to the registry-service
+
 Example:
 $ ./registry-service add --dir ./image-files ./service-conf.json username/service:1.0 my-service:1.0
 
 <config>
-        Configuration file
+        Microservice configuration file
 
 <image-name>
-        Docker image of microservice to push to (<username>/<repository>:<tag>)
+        Image name or DockerHub repo to push to (<username>/<repository>:<tag>)
 
 <service-name>
         Name of microservice to register with hash lookup
@@ -98,7 +100,7 @@ OPTIONS:`)
 
         fmt.Fprintln(os.Stderr,
 `
-Config file is a json file of this format:
+Config is a json file used to setup the microservice. Its format is as follows:
 {
     "NetworkSoftReq": {
         "RTT": int(milliseconds)

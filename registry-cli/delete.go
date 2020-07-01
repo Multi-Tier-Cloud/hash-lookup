@@ -32,6 +32,8 @@ func deleteCmd() {
         fmt.Fprintf(os.Stderr, "$ %s delete [OPTIONS ...] <service-name>\n", exeName)
         fmt.Fprintln(os.Stderr,
 `
+Delete a microservice entry
+
 <service-name>
         Name of microservice to delete
 

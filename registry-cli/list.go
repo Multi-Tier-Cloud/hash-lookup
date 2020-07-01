@@ -33,6 +33,8 @@ func listCmd() {
         fmt.Fprintf(os.Stderr, "$ %s list [OPTIONS ...]\n", exeName)
         fmt.Fprintln(os.Stderr,
 `
+List all microservices and information stored by the registry-service
+
 OPTIONS:`)
         listFlags.PrintDefaults()
     }
