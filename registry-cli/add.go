@@ -152,7 +152,19 @@ Config is a json file used to setup the microservice. Its format is as follows:
     }
     config, err := unmarshalServiceConf(configBytes)
     if err != nil {
-        log.Fatalln(err)
+        // Print error + offending line
+        syntaxErr, ok := err.(*json.SyntaxError)
+        if !ok {
+            log.Fatalln(err)
+        }
+        lineSlices := bytes.SplitAfter(configBytes, []byte("\n"))
+        byteSum := 0
+        for i, line := range lineSlices {
+            if byteSum + len(line) >= int(syntaxErr.Offset) {
+                log.Fatalf("%v (Line %d: %s)", err, i+1, bytes.TrimSpace(line))
+            }
+            byteSum += len(line)
+        }
     }
 
     var digest string
