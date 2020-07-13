@@ -7,7 +7,7 @@ require google.golang.org/grpc v1.26.0
 
 require (
 	github.com/Multi-Tier-Cloud/common v0.9.0
-	github.com/Multi-Tier-Cloud/docker-driver v0.2.2
+	github.com/Multi-Tier-Cloud/docker-driver v0.2.4
 	github.com/Multi-Tier-Cloud/service-manager v0.2.1
 	github.com/coreos/etcd v3.3.22+incompatible // indirect
 	github.com/coreos/pkg v0.0.0-20180928190104-399ea9e2e55f // indirect
