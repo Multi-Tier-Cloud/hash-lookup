@@ -158,7 +158,7 @@ Config is a json file used to setup the microservice. Its format is as follows:
     }
 }
 ```
-Every microservice gets packaged with a proxy in the same container. NetworkSoftReq and NetworkHardReq are performance requirements passed to the proxy, used when the proxy selects microservices to connect to. DockerConf defines instructions for building the docker image for your microservice. They mostly translate to Dockerfile directives. For examples, see registry-cli/add-test and https://github.com/Multi-Tier-Cloud/demos.
+Every microservice gets packaged with a proxy in the same container. NetworkSoftReq and NetworkHardReq are performance requirements passed to the proxy, used when the proxy selects microservices to connect to. DockerConf defines instructions for building the docker image for your microservice. They mostly translate to Dockerfile directives. For examples, see registry-cli/add-test and https://github.com/PhysarumSM/demos.
 
 The Dockerfile generated for building the image starts with the following core directives:
 ```

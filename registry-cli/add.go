@@ -1,4 +1,4 @@
-/* Copyright 2020 Multi-Tier-Cloud Development Team
+/* Copyright 2020 PhysarumSM Development Team
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,11 +31,11 @@ import (
 
     "golang.org/x/crypto/ssh/terminal"
 
-    "github.com/Multi-Tier-Cloud/common/p2putil"
-    "github.com/Multi-Tier-Cloud/common/util"
-    driver "github.com/Multi-Tier-Cloud/docker-driver/docker_driver"
-    "github.com/Multi-Tier-Cloud/service-registry/registry"
-    "github.com/Multi-Tier-Cloud/service-manager/conf"
+    "github.com/PhysarumSM/common/p2putil"
+    "github.com/PhysarumSM/common/util"
+    driver "github.com/PhysarumSM/docker-driver/docker_driver"
+    "github.com/PhysarumSM/service-registry/registry"
+    "github.com/PhysarumSM/service-manager/conf"
 )
 
 // Decode json config file into this struct
@@ -404,7 +404,7 @@ func buildProxy(version string) (tmpDir, proxyPath string, err error) {
         return "", "", err
     }
 
-    cloneCmd := exec.Command("git", "clone", "https://github.com/Multi-Tier-Cloud/service-manager.git")
+    cloneCmd := exec.Command("git", "clone", "https://github.com/PhysarumSM/service-manager.git")
     cloneCmd.Dir = tmpDir
     cloneCmd.Stdout = os.Stdout
     cloneCmd.Stderr = os.Stderr

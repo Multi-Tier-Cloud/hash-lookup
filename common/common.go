@@ -1,4 +1,4 @@
-/* Copyright 2020 Multi-Tier-Cloud Development Team
+/* Copyright 2020 PhysarumSM Development Team
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,9 +30,9 @@ import (
 
     "github.com/multiformats/go-multiaddr"
 
-    "github.com/Multi-Tier-Cloud/common/p2pnode"
-    "github.com/Multi-Tier-Cloud/common/p2putil"
-    "github.com/Multi-Tier-Cloud/common/util"
+    "github.com/PhysarumSM/common/p2pnode"
+    "github.com/PhysarumSM/common/p2putil"
+    "github.com/PhysarumSM/common/util"
 )
 
 const (
