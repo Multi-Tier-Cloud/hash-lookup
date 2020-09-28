@@ -356,6 +356,7 @@ COPY conf.json .
 ENV PROXY_PORT=4201
 ENV PROXY_IP=127.0.0.1
 ENV SERVICE_PORT=8080
+ENV METRICS_PORT=9010
 ENV P2P_BOOTSTRAPS=
 ENV P2P_PSK=
 `
@@ -384,7 +385,7 @@ func createDockerfile(config ServiceConf, serviceName, proxyCmd string) []byte {
         finalCmd = fmt.Sprintf("CMD %s & %s\n", proxyCmd, config.DockerConf.Cmd)
     } else if !config.DockerConf.ProxyClientMode {
         finalCmd = fmt.Sprintf(
-            "CMD ./proxy --configfile conf.json $PROXY_PORT %s $PROXY_IP:$SERVICE_PORT > proxy.log 2>&1 & %s\n",
+            "CMD ./proxy --configfile conf.json $PROXY_PORT %s $PROXY_IP:$SERVICE_PORT $METRICS_PORT > proxy.log 2>&1 & %s\n",
             serviceName, config.DockerConf.Cmd)
     } else {
         finalCmd = fmt.Sprintf(
