@@ -73,6 +73,8 @@ func addCmd() {
     useExistingImageFlag := addFlags.Bool("use-existing-image", false,
         "Do not build/push new image. Pull an existing image from DockerHub and add it to registry-service.\n" +
         "Note that you still have to provide a config file since it is needed for performance requirements.")
+    contentIdFlag := addFlags.String("content-id", "",
+        "Instead of hashing to get a content ID, use this user specified string")
 
     addUsage := func() {
         exeName := getExeName()
@@ -191,19 +193,25 @@ Config is a json file used to setup the microservice. Its format is as follows:
         return // Don't push to DockerHub or add to registry-service, just return early
     }
 
-    // Save tar archive of image
-    imageBytes, err := driver.SaveImage(imageName)
-    if err != nil {
-        log.Fatalln(err)
-    }
-    fmt.Println("Saved image successfully")
+    var hash string
+    if *contentIdFlag == "" {
+        // Save tar archive of image
+        imageBytes, err := driver.SaveImage(imageName)
+        if err != nil {
+            log.Fatalln(err)
+        }
+        fmt.Println("Saved image successfully")
 
-    // Get content hash of image
-    hash, err := util.IpfsHashBytes(imageBytes)
-    if err != nil {
-        log.Fatalln(err)
+        // Get content hash of image
+        hash, err = util.IpfsHashBytes(imageBytes)
+        if err != nil {
+            log.Fatalln(err)
+        }
+        fmt.Println("Hashed image successfully:", hash)
+    } else {
+        hash = *contentIdFlag
+        fmt.Println("Using user specified hash:", hash)
     }
-    fmt.Println("Hashed image successfully:", hash)
 
     // If used existing image, no need to push to DockerHub
     if !(*useExistingImageFlag) {
